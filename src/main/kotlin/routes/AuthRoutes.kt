@@ -1,0 +1,70 @@
+package com.amos_tech_code.routes
+
+import com.amos_tech_code.domain.dtos.requests.GoogleSignInRequest
+import com.amos_tech_code.domain.dtos.requests.StudentLoginRequest
+import com.amos_tech_code.domain.dtos.requests.StudentRegistrationRequest
+import com.amos_tech_code.domain.dtos.response.LecturerAuthResponse
+import com.amos_tech_code.domain.dtos.response.StudentAuthResponse
+import com.amos_tech_code.services.AuthService
+import io.ktor.http.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+
+fun Route.authRoutes(authService: AuthService) {
+
+    route("api/v1/auth") {
+        // Lecturer Google Sign-in
+        post("/lecturers/google") {
+            val request = call.receive<GoogleSignInRequest>()
+            val result = authService.authenticateLecturerWithGoogle(request.idToken)
+
+            call.respond(
+                HttpStatusCode.OK,
+                LecturerAuthResponse(
+                    token = result.token,
+                    userId = result.userId,
+                    email = result.email,
+                    userType = result.userType,
+                    profileComplete = result.profileComplete
+                )
+            )
+        }
+
+        // Student Registration
+        post("/students/register") {
+            val request = call.receive<StudentRegistrationRequest>()
+
+            val result = authService.registerStudent(request)
+
+            call.respond(
+                HttpStatusCode.Created,
+                StudentAuthResponse(
+                token = result.token,
+                userType = result.userType,
+                userId = result.userId,
+                fullName = result.fullName,
+                regNumber = result.regNumber,
+            ))
+        }
+
+        // Student Login
+        post("/students/login") {
+            val request = call.receive<StudentLoginRequest>()
+            val result = authService.loginStudent(
+                request.registrationNumber,
+                request.deviceInfo
+            )
+
+            call.respond(
+                HttpStatusCode.OK,
+                StudentAuthResponse(
+                token = result.token,
+                userType = result.userType,
+                userId = result.userId,
+                fullName = result.fullName,
+                regNumber = result.regNumber,
+            ))
+        }
+    }
+}
