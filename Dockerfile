@@ -1,0 +1,22 @@
+# Build stage
+FROM gradle:8.4-jdk23 AS build
+
+# Set working directory and copy files with correct permissions
+WORKDIR /home/gradle/src
+COPY --chown=gradle:gradle . .
+
+# Build the fat JAR
+RUN gradle buildFatJar --no-daemon
+
+# Runtime stage
+FROM eclipse-temurin:23-jre-jammy
+
+# Expose port
+EXPOSE 8443
+
+# Create app directory and copy JAR
+RUN mkdir /app
+COPY --from=build /home/gradle/src/build/libs/*.jar /app/SmartAttend.jar
+
+# Entrypoint
+ENTRYPOINT ["java", "-jar", "/app/SmartAttend.jar"]
