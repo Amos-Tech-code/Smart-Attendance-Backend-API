@@ -1,5 +1,5 @@
 # Build stage
-FROM gradle:8.4-jdk23 AS build
+FROM gradle:8.4-jdk17 AS build
 
 # Set working directory and copy files with correct permissions
 WORKDIR /home/gradle/src
@@ -9,7 +9,7 @@ COPY --chown=gradle:gradle . .
 RUN gradle buildFatJar --no-daemon
 
 # Runtime stage
-FROM eclipse-temurin:23-jre-jammy
+FROM eclipse-temurin:17-jre-jammy
 
 # Expose port
 EXPOSE 8443
