@@ -1,5 +1,5 @@
 # Build stage
-FROM gradle:8.4-jdk17 AS build
+FROM gradle:8.12.1-jdk17 AS build
 
 # Set working directory and copy files with correct permissions
 WORKDIR /home/gradle/src
