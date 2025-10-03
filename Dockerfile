@@ -16,7 +16,7 @@ EXPOSE 8443
 
 # Create app directory and copy JAR
 RUN mkdir /app
-COPY --from=build /home/gradle/src/build/libs/*.jar /app/SmartAttend.jar
+COPY --from=build /home/gradle/src/build/libs/*-all.jar /app/SmartAttend.jar
 
 # Entrypoint
 ENTRYPOINT ["java", "-jar", "/app/SmartAttend.jar"]
