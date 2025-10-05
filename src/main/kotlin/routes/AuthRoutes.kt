@@ -23,10 +23,10 @@ fun Route.authRoutes(authService: AuthService) {
                 HttpStatusCode.OK,
                 LecturerAuthResponse(
                     token = result.token,
-                    userId = result.userId,
                     email = result.email,
+                    name = result.name,
+                    profileComplete = result.profileComplete,
                     userType = result.userType,
-                    profileComplete = result.profileComplete
                 )
             )
         }
@@ -41,10 +41,9 @@ fun Route.authRoutes(authService: AuthService) {
                 HttpStatusCode.Created,
                 StudentAuthResponse(
                 token = result.token,
-                userType = result.userType,
-                userId = result.userId,
                 fullName = result.fullName,
                 regNumber = result.regNumber,
+                userType = result.userType,
             ))
         }
 
@@ -60,11 +59,10 @@ fun Route.authRoutes(authService: AuthService) {
                 HttpStatusCode.OK,
                 StudentAuthResponse(
                 token = result.token,
-                userType = result.userType,
-                userId = result.userId,
                 fullName = result.fullName,
                 regNumber = result.regNumber,
-            ))
+                userType = result.userType
+                ))
         }
     }
 }

@@ -87,7 +87,7 @@ fun Application.seedDatabase() {
 
                 println("Default lecturer seeded successfully.")
             } else {
-                println("Lecturers already exist, skipping seeding.")
+                println("Lecturer already exist, skipping seeding.")
             }
         }
     }

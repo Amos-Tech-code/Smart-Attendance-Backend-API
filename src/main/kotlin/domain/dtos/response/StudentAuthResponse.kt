@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class StudentAuthResponse(
     val token: String,
-    val userId: String,
     val fullName: String,
     val regNumber: String,
     val userType: UserRole,

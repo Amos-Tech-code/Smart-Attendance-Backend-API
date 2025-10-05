@@ -19,7 +19,6 @@ import com.amos_tech_code.utils.ConflictException
 import com.amos_tech_code.utils.InternalServerException
 import com.amos_tech_code.utils.ResourceNotFoundException
 import com.amos_tech_code.utils.ValidationException
-import io.ktor.server.plugins.BadRequestException
 import java.time.LocalDateTime
 import java.util.*
 
@@ -45,10 +44,10 @@ class AuthServiceImpl(
 
                 LecturerAuthResponse(
                     token = JwtConfig.generateToken(existingLecturer.id.toString(), UserRole.LECTURER),
-                    userType = UserRole.LECTURER,
-                    userId = existingLecturer.id.toString(),
+                    name = existingLecturer.name ?: "Unknown",
                     email = existingLecturer.email,
-                    profileComplete = existingLecturer.isProfileComplete
+                    profileComplete = existingLecturer.isProfileComplete,
+                    userType = UserRole.LECTURER
                 )
             } else {
                 // Create new lecturer
@@ -65,10 +64,10 @@ class AuthServiceImpl(
 
                 LecturerAuthResponse(
                     token = JwtConfig.generateToken(savedLecturer.id.toString(), UserRole.LECTURER),
-                    userType = UserRole.LECTURER,
-                    userId = savedLecturer.id.toString(),
+                    name = savedLecturer.name ?: "Unknown",
                     email = savedLecturer.email,
-                    profileComplete = false
+                    profileComplete = false,
+                    userType = UserRole.LECTURER
                 )
             }
         } catch (e: AppException) {
@@ -114,7 +113,6 @@ class AuthServiceImpl(
 
             return StudentAuthResponse(
                 token = JwtConfig.generateToken(savedStudent.id.toString(), UserRole.STUDENT),
-                userId = savedStudent.id.toString(),
                 userType = UserRole.STUDENT,
                 fullName = savedStudent.fullName,
                 regNumber = savedStudent.registrationNumber,
@@ -161,7 +159,6 @@ class AuthServiceImpl(
 
             return StudentAuthResponse(
                 token = JwtConfig.generateToken(student.id.toString(), UserRole.STUDENT),
-                userId = student.id.toString(),
                 userType = UserRole.STUDENT,
                 fullName = student.fullName,
                 regNumber = student.registrationNumber
