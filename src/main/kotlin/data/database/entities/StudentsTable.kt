@@ -29,7 +29,7 @@ object DevicesTable : Table("student_devices") {
     val id: Column<UUID> = uuid("id").autoGenerate()
     val studentId: Column<UUID> = uuid("student_id").references(StudentsTable.id, onDelete = ReferenceOption.CASCADE)
 
-    val deviceId: Column<String> = varchar("device_id", 255) // ANDROID_ID or generated UUID
+    val deviceId: Column<String> = varchar("device_id", 255)
     val deviceModel: Column<String> = varchar("model", 100)
     val os: Column<String> = varchar("os", 50)
     val fcmToken: Column<String?> = varchar("fcm_token", 255).nullable()
@@ -39,7 +39,9 @@ object DevicesTable : Table("student_devices") {
     val updatedAt: Column<LocalDateTime> = datetime("updated_at").clientDefault { now() }
 
     override val primaryKey = PrimaryKey(id)
+
     init {
         uniqueIndex("unique_student_device", studentId, deviceId)
     }
+
 }

@@ -4,7 +4,7 @@ import io.ktor.http.HttpStatusCode
 
 sealed class AppException(
     message: String,
-    val httpStatus: HttpStatusCode,
+    httpStatus: HttpStatusCode,
 ) : Exception(message)
 
 class ValidationException(

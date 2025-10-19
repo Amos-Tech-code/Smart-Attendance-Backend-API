@@ -2,6 +2,7 @@ package com.amos_tech_code.plugins
 
 import com.amos_tech_code.domain.dtos.response.GenericResponseDto
 import com.amos_tech_code.routes.authRoutes
+import com.amos_tech_code.routes.lecturerAcademicSetupRoutes
 import com.amos_tech_code.services.AuthService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
@@ -27,5 +28,6 @@ fun Application.configureRouting() {
         }
 
         authRoutes(authService)
+        lecturerAcademicSetupRoutes()
     }
 }

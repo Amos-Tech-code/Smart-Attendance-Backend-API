@@ -1,6 +1,7 @@
 package com.amos_tech_code.utils
 
 import com.amos_tech_code.domain.dtos.response.GenericResponseDto
+import com.amos_tech_code.domain.models.UserRole
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -29,6 +30,10 @@ suspend fun ApplicationCall.respondForbidden(message: String? = null) {
     )
 }
 
-suspend fun ApplicationCall.getUserIdFromJWT(): UUID? {
+fun ApplicationCall.getUserIdFromJWT() : UUID? {
     return principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asString()?.let { UUID.fromString(it) }
+}
+
+fun ApplicationCall.getUserRoleFromJWT() : String? {
+    return principal<JWTPrincipal>()?.payload?.getClaim("role")?.asString()
 }
