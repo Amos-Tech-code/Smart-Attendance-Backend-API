@@ -9,9 +9,11 @@ import com.amos_tech_code.data.database.entities.ProgrammesTable
 import com.amos_tech_code.data.database.entities.UnitsTable
 import com.amos_tech_code.data.database.entities.UniversitiesTable
 import com.amos_tech_code.data.database.utils.exposedTransaction
+import com.amos_tech_code.domain.dtos.requests.UnitRequest
 import com.amos_tech_code.domain.dtos.response.AcademicSetupResponse
 import com.amos_tech_code.domain.dtos.response.ProgrammeResponse
 import com.amos_tech_code.domain.dtos.response.UnitResponse
+import com.amos_tech_code.domain.dtos.response.UniversitySetupResponse
 import com.amos_tech_code.utils.InternalServerException
 import com.amos_tech_code.utils.ResourceNotFoundException
 import org.jetbrains.exposed.sql.JoinType
@@ -22,56 +24,51 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.upperCase
 import java.util.UUID
 
 
 class LecturerAcademicRepository {
 
     fun findOrCreateUniversity(universityName: String): UUID = exposedTransaction {
-        val universityNameUpperCase = universityName.uppercase()
-        // Try to find existing university
+        val normalizedName = normalizeName(universityName)
+
+        // Try to find existing university using normalized name
         val existingUniversity = UniversitiesTable
-            .selectAll().where { UniversitiesTable.name eq universityNameUpperCase }
+            .selectAll().where { UniversitiesTable.name eq normalizedName }
             .singleOrNull()
             ?.get(UniversitiesTable.id)
 
-        if (existingUniversity != null) {
-            return@exposedTransaction existingUniversity
+        existingUniversity ?: run {
+            val universityId = UUID.randomUUID()
+            UniversitiesTable.insert {
+                it[id] = universityId
+                it[name] = normalizedName
+            }
+            universityId
         }
-
-        // Create new university
-        val universityId = UUID.randomUUID()
-        UniversitiesTable.insert {
-            it[id] = universityId
-            it[name] = universityNameUpperCase
-        }
-
-        universityId
     }
 
     fun findOrCreateDepartment(universityId: UUID, departmentName: String): UUID = exposedTransaction {
-        // Try to find existing department
+        val normalizedName = normalizeName(departmentName)
+
         val existingDepartment = DepartmentsTable
             .selectAll().where {
                 (DepartmentsTable.universityId eq universityId) and
-                        (DepartmentsTable.name eq departmentName.uppercase())
+                        (DepartmentsTable.name eq normalizedName)
             }
             .singleOrNull()
             ?.get(DepartmentsTable.id)
 
-        if (existingDepartment != null) {
-            return@exposedTransaction existingDepartment
+        existingDepartment ?: run {
+            val departmentId = UUID.randomUUID()
+            DepartmentsTable.insert {
+                it[id] = departmentId
+                it[DepartmentsTable.universityId] = universityId
+                it[name] = normalizedName
+            }
+            departmentId
         }
-
-        // Create new department
-        val departmentId = UUID.randomUUID()
-        DepartmentsTable.insert {
-            it[id] = departmentId
-            it[DepartmentsTable.universityId] = universityId
-            it[name] = departmentName.uppercase()
-        }
-
-        departmentId
     }
 
     fun findOrCreateProgramme(
@@ -80,116 +77,156 @@ class LecturerAcademicRepository {
         programmeName: String,
         yearOfStudy: Int
     ): UUID = exposedTransaction {
-        // For existing programmes, we need to match by ID if provided, or by name+department+university
+        val normalizedName = normalizeName(programmeName)
+
         val existingProgramme = ProgrammesTable
             .selectAll().where {
                 (ProgrammesTable.universityId eq universityId) and
-                        (ProgrammesTable.name eq programmeName) and
-                        (ProgrammesTable.departmentId eq departmentId)
+                        (ProgrammesTable.departmentId eq departmentId) and
+                        (ProgrammesTable.name eq normalizedName)
             }
             .singleOrNull()
             ?.get(ProgrammesTable.id)
 
-        if (existingProgramme != null) {
-            return@exposedTransaction existingProgramme
+        existingProgramme ?: run {
+            val programmeId = UUID.randomUUID()
+            ProgrammesTable.insert {
+                it[id] = programmeId
+                it[ProgrammesTable.universityId] = universityId
+                it[ProgrammesTable.departmentId] = departmentId
+                it[name] = normalizedName
+            }
+            programmeId
         }
-
-        // Create new programme
-        val programmeId = UUID.randomUUID()
-        ProgrammesTable.insert {
-            it[id] = programmeId
-            it[ProgrammesTable.universityId] = universityId
-            it[ProgrammesTable.departmentId] = departmentId
-            it[name] = programmeName
-        }
-
-        programmeId
     }
 
-    fun findOrCreateUnit(universityId: UUID, unitCode: String, unitName: String): UUID = exposedTransaction {
-        // Try to find existing unit by code
-        val existingUnit = UnitsTable
-            .selectAll().where  {
-                (UnitsTable.universityId eq universityId) and
-                        (UnitsTable.code eq unitCode)
-            }
-            .singleOrNull()
-            ?.get(UnitsTable.id)
+    // Batch operation for units
+    fun findOrCreateUnitsBatch(universityId: UUID, unitRequests: List<UnitRequest>): Map<String, UUID> = exposedTransaction {
+        if (unitRequests.isEmpty()) return@exposedTransaction emptyMap()
 
-        if (existingUnit != null) {
-            // Update unit name if different
-            if (UnitsTable
-                    .selectAll().where { UnitsTable.id eq existingUnit }
-                    .single()[UnitsTable.name] != unitName
-            ) {
-                UnitsTable.update({ UnitsTable.id eq existingUnit }) {
-                    it[name] = unitName
+        val normalizedUnits = unitRequests.associate { request ->
+            normalizeCode(request.code) to normalizeName(request.name)
+        }
+
+        // Single query to find all existing units
+        val existingUnits = UnitsTable
+            .selectAll().where {
+                (UnitsTable.universityId eq universityId) and
+                        (UnitsTable.code inList normalizedUnits.keys)
+            }
+            .associate { row ->
+                row[UnitsTable.code] to Pair(row[UnitsTable.id], row[UnitsTable.name])
+            }
+
+        val result = mutableMapOf<String, UUID>()
+        val unitsToUpdate = mutableListOf<Pair<UUID, String>>()
+        val unitsToCreate = mutableListOf<Pair<String, String>>()
+
+        // Separate existing units that need updates and new units to create
+        normalizedUnits.forEach { (code, normalizedName) ->
+            val existingUnit = existingUnits[code]
+            if (existingUnit != null) {
+                val (unitId, currentName) = existingUnit
+                result[code] = unitId
+
+                // Check if name needs update (using normalized comparison)
+                if (normalizeName(currentName) != normalizedName) {
+                    unitsToUpdate.add(unitId to normalizedName)
+                }
+            } else {
+                unitsToCreate.add(code to normalizedName)
+            }
+        }
+
+        // Batch update units that need name changes
+        if (unitsToUpdate.isNotEmpty()) {
+            unitsToUpdate.forEach { (unitId, newName) ->
+                UnitsTable.update({ UnitsTable.id eq unitId }) {
+                    it[name] = newName
                 }
             }
-            return@exposedTransaction existingUnit
         }
 
-        // Create new unit
-        val unitId = UUID.randomUUID()
-        UnitsTable.insert {
-            it[id] = unitId
-            it[UnitsTable.universityId] = universityId
-            it[code] = unitCode
-            it[name] = unitName
+        // Batch create new units
+        if (unitsToCreate.isNotEmpty()) {
+            unitsToCreate.forEach { (code, name) ->
+                val unitId = UUID.randomUUID()
+                result[code] = unitId
+                UnitsTable.insert {
+                    it[id] = unitId
+                    it[UnitsTable.universityId] = universityId
+                    it[UnitsTable.code] = code
+                    it[UnitsTable.name] = name
+                }
+            }
         }
 
-        unitId
+        result
     }
 
-    fun linkProgrammeUnit(programmeId: UUID, unitId: UUID, yearOfStudy: Int) = exposedTransaction {
-        // Check if link already exists
-        val existingLink = ProgrammeUnitsTable
+    // Batch operation for programme-unit links
+    fun linkProgrammeUnitsBatch(programmeId: UUID, unitIds: Map<String, UUID>, yearOfStudy: Int) = exposedTransaction {
+        if (unitIds.isEmpty()) return@exposedTransaction
+
+        // Single query to find existing links
+        val existingLinks = ProgrammeUnitsTable
             .selectAll().where {
                 (ProgrammeUnitsTable.programmeId eq programmeId) and
-                        (ProgrammeUnitsTable.unitId eq unitId) and
+                        (ProgrammeUnitsTable.unitId inList unitIds.values) and
                         (ProgrammeUnitsTable.yearOfStudy eq yearOfStudy)
             }
-            .singleOrNull()
+            .map { it[ProgrammeUnitsTable.unitId] }
+            .toSet()
 
-        if (existingLink == null) {
-            ProgrammeUnitsTable.insert {
-                it[id] = UUID.randomUUID()
-                it[ProgrammeUnitsTable.programmeId] = programmeId
-                it[ProgrammeUnitsTable.unitId] = unitId
-                it[ProgrammeUnitsTable.yearOfStudy] = yearOfStudy
+        // Batch create missing links
+        val linksToCreate = unitIds.values.filter { it !in existingLinks }
+        if (linksToCreate.isNotEmpty()) {
+            linksToCreate.forEach { unitId ->
+                ProgrammeUnitsTable.insert {
+                    it[id] = UUID.randomUUID()
+                    it[ProgrammeUnitsTable.programmeId] = programmeId
+                    it[ProgrammeUnitsTable.unitId] = unitId
+                    it[ProgrammeUnitsTable.yearOfStudy] = yearOfStudy
+                }
             }
         }
     }
 
-    fun createTeachingAssignment(
+    // Batch operation for teaching assignments
+    fun createTeachingAssignmentsBatch(
         lecturerId: UUID,
         universityId: UUID,
         programmeId: UUID,
-        unitId: UUID,
+        unitIds: Map<String, UUID>,
         yearOfStudy: Int
     ) = exposedTransaction {
+        if (unitIds.isEmpty()) return@exposedTransaction
 
-        // Check if assignment already exists
-        val existingAssignment = LecturerTeachingAssignmentsTable
-            .selectAll().where  {
+        // Single query to find existing assignments
+        val existingAssignments = LecturerTeachingAssignmentsTable
+            .selectAll().where {
                 (LecturerTeachingAssignmentsTable.lecturerId eq lecturerId) and
                         (LecturerTeachingAssignmentsTable.universityId eq universityId) and
                         (LecturerTeachingAssignmentsTable.programmeId eq programmeId) and
-                        (LecturerTeachingAssignmentsTable.unitId eq unitId) and
+                        (LecturerTeachingAssignmentsTable.unitId inList unitIds.values) and
                         (LecturerTeachingAssignmentsTable.yearOfStudy eq yearOfStudy)
-                        // and (LecturerTeachingAssignmentsTable.academicYear eq academicYear)
             }
-            .singleOrNull()
+            .map { it[LecturerTeachingAssignmentsTable.unitId] }
+            .toSet()
 
-        if (existingAssignment == null) {
-            LecturerTeachingAssignmentsTable.insert {
-                it[id] = UUID.randomUUID()
-                it[LecturerTeachingAssignmentsTable.lecturerId] = lecturerId
-                it[LecturerTeachingAssignmentsTable.universityId] = universityId
-                it[LecturerTeachingAssignmentsTable.programmeId] = programmeId
-                it[LecturerTeachingAssignmentsTable.unitId] = unitId
-                it[LecturerTeachingAssignmentsTable.yearOfStudy] = yearOfStudy
-                it[LecturerTeachingAssignmentsTable.academicYear] = academicYear
+        // Batch create missing assignments
+        val assignmentsToCreate = unitIds.values.filter { it !in existingAssignments }
+        if (assignmentsToCreate.isNotEmpty()) {
+            assignmentsToCreate.forEach { unitId ->
+                LecturerTeachingAssignmentsTable.insert {
+                    it[id] = UUID.randomUUID()
+                    it[LecturerTeachingAssignmentsTable.lecturerId] = lecturerId
+                    it[LecturerTeachingAssignmentsTable.universityId] = universityId
+                    it[LecturerTeachingAssignmentsTable.programmeId] = programmeId
+                    it[LecturerTeachingAssignmentsTable.unitId] = unitId
+                    it[LecturerTeachingAssignmentsTable.yearOfStudy] = yearOfStudy
+                    it[LecturerTeachingAssignmentsTable.academicYear] = null
+                }
             }
         }
     }
@@ -221,8 +258,7 @@ class LecturerAcademicRepository {
         // Get the most recent university setup for the lecturer
         val universitySetup = LecturerTeachingAssignmentsTable
             .join(UniversitiesTable, JoinType.INNER, LecturerTeachingAssignmentsTable.universityId, UniversitiesTable.id)
-            .selectAll().where  { LecturerTeachingAssignmentsTable.lecturerId eq lecturerId }
-            .groupBy(UniversitiesTable.id, UniversitiesTable.name)
+            .selectAll().where { LecturerTeachingAssignmentsTable.lecturerId eq lecturerId }
             .orderBy(LecturerTeachingAssignmentsTable.createdAt to SortOrder.DESC)
             .firstOrNull()
 
@@ -243,32 +279,65 @@ class LecturerAcademicRepository {
         )
     }
 
+    fun getLecturerUniversities(lecturerId: UUID): List<UniversitySetupResponse> = exposedTransaction {
+        // Get all universities associated with the lecturer
+        val universities = LecturerUniversitiesTable
+            .join(UniversitiesTable, JoinType.INNER, LecturerUniversitiesTable.universityId, UniversitiesTable.id)
+            .selectAll().where { LecturerUniversitiesTable.lecturerId eq lecturerId }
+            .map { row ->
+                val universityId = row[UniversitiesTable.id]
+                UniversitySetupResponse(
+                    id = universityId.toString(),
+                    name = row[UniversitiesTable.name],
+                    programmes = getProgrammesForLecturerUniversity(lecturerId, universityId)
+                )
+            }
+
+        universities
+    }
+
+    fun getLecturerUniversity(lecturerId: UUID, universityId: UUID): UniversitySetupResponse? = exposedTransaction {
+        // Check if lecturer is associated with this university
+        val universityAssociation = LecturerUniversitiesTable
+            .join(UniversitiesTable, JoinType.INNER, LecturerUniversitiesTable.universityId, UniversitiesTable.id)
+            .selectAll().where {
+                (LecturerUniversitiesTable.lecturerId eq lecturerId) and
+                        (LecturerUniversitiesTable.universityId eq universityId)
+            }
+            .singleOrNull()
+
+        universityAssociation?.let { row ->
+            UniversitySetupResponse(
+                id = universityId.toString(),
+                name = row[UniversitiesTable.name],
+                programmes = getProgrammesForLecturerUniversity(lecturerId, universityId)
+            )
+        }
+    }
+
     private fun getProgrammesForLecturerUniversity(lecturerId: UUID, universityId: UUID): List<ProgrammeResponse> {
         return LecturerTeachingAssignmentsTable
             .join(ProgrammesTable, JoinType.INNER, LecturerTeachingAssignmentsTable.programmeId, ProgrammesTable.id)
             .join(DepartmentsTable, JoinType.INNER, ProgrammesTable.departmentId, DepartmentsTable.id)
-            .selectAll().where  {
+            .selectAll().where {
                 (LecturerTeachingAssignmentsTable.lecturerId eq lecturerId) and
                         (LecturerTeachingAssignmentsTable.universityId eq universityId)
             }
-            .groupBy(
-                ProgrammesTable.id,
-                ProgrammesTable.name,
-                DepartmentsTable.name,
-                LecturerTeachingAssignmentsTable.yearOfStudy
-            )
             .map { row ->
-                val programmeId = row[ProgrammesTable.id]
-                val yearOfStudy = row[LecturerTeachingAssignmentsTable.yearOfStudy]
-
                 ProgrammeResponse(
-                    id = programmeId.toString(),
+                    id = row[ProgrammesTable.id].toString(),
                     name = row[ProgrammesTable.name],
                     department = row[DepartmentsTable.name],
-                    yearOfStudy = yearOfStudy,
-                    units = getUnitsForLecturerProgramme(lecturerId, universityId, programmeId, yearOfStudy)
+                    yearOfStudy = row[LecturerTeachingAssignmentsTable.yearOfStudy],
+                    units = getUnitsForLecturerProgramme(
+                        lecturerId,
+                        universityId,
+                        row[ProgrammesTable.id],
+                        row[LecturerTeachingAssignmentsTable.yearOfStudy]
+                    )
                 )
             }
+            .distinctBy { Triple(it.id, it.name, it.yearOfStudy) } // Remove duplicates
     }
 
     private fun getUnitsForLecturerProgramme(
@@ -295,4 +364,18 @@ class LecturerAcademicRepository {
     }
 
 
+    // Enhanced normalization functions
+    private fun normalizeName(name: String): String {
+        return name
+            .trim()
+            .replace("\\s+".toRegex(), " ") // Replace multiple spaces with single space
+            .uppercase()
+    }
+
+    private fun normalizeCode(code: String): String {
+        return code
+            .trim()
+            .uppercase()
+            .replace("\\s+".toRegex(), "") // Remove all spaces from codes
+    }
 }

@@ -1,34 +1,28 @@
 package com.amos_tech_code.routes
 
 import com.amos_tech_code.domain.dtos.requests.AcademicSetupUpRequest
-import com.amos_tech_code.domain.dtos.response.AcademicSetupResponse
 import com.amos_tech_code.domain.models.UserRole
-import com.amos_tech_code.services.impl.LecturerAcademicServiceImpl
-import com.amos_tech_code.utils.ValidationException
+import com.amos_tech_code.services.LecturerAcademicService
 import com.amos_tech_code.utils.getUserIdFromJWT
 import com.amos_tech_code.utils.getUserRoleFromJWT
 import com.amos_tech_code.utils.respondBadRequest
 import com.amos_tech_code.utils.respondForbidden
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.request.receive
-import io.ktor.server.response.respond
-import io.ktor.server.routing.Route
-import io.ktor.server.routing.post
-import io.ktor.server.routing.route
+import io.ktor.http.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 
 fun Route.lecturerAcademicSetupRoutes(
-    lecturerAcademicService : LecturerAcademicServiceImpl
+    lecturerAcademicService : LecturerAcademicService
 ) {
 
     route("api/v1/lecturer") {
 
         post("/academic-setup") {
 
-            val lecturerId = call.getUserIdFromJWT()
-                ?: return@post call.respondBadRequest("Lecturer ID is required")
+            val lecturerId = call.getUserIdFromJWT() ?: return@post call.respondBadRequest("Lecturer ID is required")
 
-            val role = call.getUserRoleFromJWT() ?: return@post call.respondForbidden()
-            if (role.uppercase() != UserRole.LECTURER.name) return@post call.respondForbidden()
+            if (call.getUserRoleFromJWT()?.uppercase() != UserRole.LECTURER.name) return@post call.respondForbidden()
 
             val request = call.receive<AcademicSetupUpRequest>()
 
@@ -39,6 +33,23 @@ fun Route.lecturerAcademicSetupRoutes(
                 academicSetup
             )
 
+        }
+
+        get("/academic-setup") {
+
+            val lecturerId = call.getUserIdFromJWT() ?: return@get call.respondBadRequest("Lecturer ID is required")
+
+            if (call.getUserRoleFromJWT()?.uppercase() != UserRole.LECTURER.name) return@get call.respondForbidden()
+
+            // Optional universityId parameter
+            val universityId = call.parameters["universityId"]
+
+            val academicSetup = lecturerAcademicService.getLecturerAcademicSetup(lecturerId, universityId)
+
+            call.respond(
+                HttpStatusCode.OK,
+                academicSetup
+            )
         }
 
     }

@@ -5,17 +5,20 @@ import com.amos_tech_code.domain.dtos.requests.AcademicSetupUpRequest
 import com.amos_tech_code.domain.dtos.requests.ProgrammeRequest
 import com.amos_tech_code.domain.dtos.requests.UnitRequest
 import com.amos_tech_code.domain.dtos.response.AcademicSetupResponse
+import com.amos_tech_code.domain.dtos.response.LecturerUniversitiesResponse
+import com.amos_tech_code.services.LecturerAcademicService
 import com.amos_tech_code.utils.AppException
 import com.amos_tech_code.utils.InternalServerException
+import com.amos_tech_code.utils.ResourceNotFoundException
 import com.amos_tech_code.utils.ValidationException
 import java.util.UUID
 import org.jetbrains.exposed.sql.transactions.transaction
 
 class LecturerAcademicServiceImpl(
     private val repository: LecturerAcademicRepository
-) {
+) : LecturerAcademicService {
 
-    fun saveAcademicSetup(lecturerId: UUID, request: AcademicSetupUpRequest): AcademicSetupResponse {
+    override fun saveAcademicSetup(lecturerId: UUID, request: AcademicSetupUpRequest): AcademicSetupResponse {
         // Step 1: Validate ALL input first (before any database interaction)
         validateAcademicSetupRequest(request)
 
@@ -41,28 +44,20 @@ class LecturerAcademicServiceImpl(
                         yearOfStudy = programmeRequest.yearOfStudy
                     )
 
-                    // Step 5c: Process each unit in the programme
-                    for (unitRequest in programmeRequest.units) {
-                        // Find or create unit
-                        val unitId = repository.findOrCreateUnit(
-                            universityId = universityId,
-                            unitCode = unitRequest.code,
-                            unitName = unitRequest.name
-                        )
+                    // Step 5c: Process ALL units in batch for this programme
+                    if (programmeRequest.units.isNotEmpty()) {
+                        // Batch create/find all units for this programme
+                        val unitIds = repository.findOrCreateUnitsBatch(universityId, programmeRequest.units)
 
-                        // Link unit to programme
-                        repository.linkProgrammeUnit(
-                            programmeId = programmeId,
-                            unitId = unitId,
-                            yearOfStudy = programmeRequest.yearOfStudy
-                        )
+                        // Batch link all units to programme
+                        repository.linkProgrammeUnitsBatch(programmeId, unitIds, programmeRequest.yearOfStudy)
 
-                        // Create teaching assignment
-                        repository.createTeachingAssignment(
+                        // Batch create teaching assignments
+                        repository.createTeachingAssignmentsBatch(
                             lecturerId = lecturerId,
                             universityId = universityId,
                             programmeId = programmeId,
-                            unitId = unitId,
+                            unitIds = unitIds,
                             yearOfStudy = programmeRequest.yearOfStudy
                         )
                     }
@@ -78,8 +73,34 @@ class LecturerAcademicServiceImpl(
                 // Rollback will happen automatically
                 when (ex) {
                     is AppException -> throw ex
-                    else -> throw InternalServerException("Failed to save academic setup: ${ex.message}")
+                    else -> throw InternalServerException("Failed to save academic setup")
                 }
+            }
+        }
+    }
+
+    override suspend fun getLecturerAcademicSetup(lecturerId: UUID, universityId: String?): LecturerUniversitiesResponse {
+        try {
+            return if (universityId != null) {
+                // Return setup for specific university
+                val universityUuid = UUID.fromString(universityId)
+                val universitySetup = repository.getLecturerUniversity(lecturerId, universityUuid)
+                    ?: throw ResourceNotFoundException("University not found")
+
+                LecturerUniversitiesResponse(universities = listOf(universitySetup))
+
+            } else {
+                // Return setup for all universities
+                val universities = repository.getLecturerUniversities(lecturerId)
+                if (universities.isEmpty()) {
+                    throw ResourceNotFoundException("No academic setup found for lecturer")
+                }
+                LecturerUniversitiesResponse(universities = universities)
+            }
+        } catch (ex: Exception) {
+            when (ex) {
+                is AppException -> throw ex
+                else -> throw InternalServerException("Failed to get academic setup")
             }
         }
     }

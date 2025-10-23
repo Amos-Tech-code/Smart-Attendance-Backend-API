@@ -50,9 +50,16 @@ dependencies {
     // Ktor client
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
-
+    // Jackson JSON serialization
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
+    // QR Code generation
+    implementation("com.google.zxing:core:3.5.1")
+    implementation("com.google.zxing:javase:3.5.1")
+    // Cloudinary SDK
+    implementation("com.cloudinary:cloudinary-http44:1.36.0")
 
 }
+
 repositories {
     mavenCentral()
 }

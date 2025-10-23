@@ -20,7 +20,7 @@ fun Application.configureAuthentication() {
     val jwtRealm = AppConfig.JWT_REALM
     val jwtSecret = AppConfig.JWT_SECRET
 
-    authentication {
+    install(Authentication) {
 
         jwt("jwt-auth") {
             realm = jwtRealm

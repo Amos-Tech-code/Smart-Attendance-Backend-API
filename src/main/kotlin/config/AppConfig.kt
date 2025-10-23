@@ -11,6 +11,10 @@ object AppConfig {
         filename = ".env"
     }
 
+    // Server Configuration
+    val SERVER_HOST = env["SERVER_HOST"]
+    val SERVER_PORT = env["SERVER_PORT"]?.toInt()
+
     // JWT Configuration
     val JWT_SECRET = env["JWT_SECRET"]
     val JWT_ISSUER = env["JWT_ISSUER"]
@@ -25,7 +29,9 @@ object AppConfig {
     val DB_USER = env["DB_USER"]
     val DB_PASSWORD = env["DB_PASSWORD"]
 
-    // Server Configuration
-    val SERVER_HOST = env["SERVER_HOST"]
-    val SERVER_PORT = env["SERVER_PORT"]?.toInt()
+    // Cloudinary Configuration
+    val CLOUD_NAME = env["CLOUDINARY_NAME"] ?: throw IllegalArgumentException("CLOUDINARY_NAME is required")
+    val API_KEY = env["CLOUDINARY_API_KEY"] ?: throw IllegalArgumentException("CLOUDINARY_API_KEY is required")
+    val API_SECRET = env["CLOUDINARY_API_SECRET"] ?: throw IllegalArgumentException("CLOUDINARY_API_SECRET is required")
+
 }
