@@ -11,6 +11,7 @@ import com.amos_tech_code.data.database.entities.LecturersTable
 import com.amos_tech_code.data.database.entities.ProgrammeUnitsTable
 import com.amos_tech_code.data.database.entities.ProgrammesTable
 import com.amos_tech_code.data.database.entities.SessionProgrammesTable
+import com.amos_tech_code.data.database.entities.StudentProgrammesTable
 import com.amos_tech_code.data.database.entities.StudentsTable
 import com.amos_tech_code.data.database.entities.SuspiciousLoginsTable
 import com.amos_tech_code.data.database.entities.UnitsTable
@@ -53,6 +54,7 @@ object DatabaseFactory {
                     // Students
                     StudentsTable,
                     DevicesTable,
+                    StudentProgrammesTable,
                     SuspiciousLoginsTable,
 
                     // Lecturers
@@ -102,7 +104,7 @@ fun Application.seedDatabase() {
                 println("Seeding default lecturer...")
 
                 LecturersTable.insert {
-                    it[email] = "default.lecturer@university.com"
+                    it[email] = "lecturer@example.com"
                     it[fullName] = "Default Lecturer"
                     it[isProfileComplete] = false
                     it[isActive] = true

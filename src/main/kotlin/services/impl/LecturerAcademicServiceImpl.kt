@@ -1,6 +1,6 @@
 package com.amos_tech_code.services.impl
 
-import com.amos_tech_code.data.repository.impl.LecturerAcademicRepository
+import com.amos_tech_code.data.repository.LecturerAcademicRepository
 import com.amos_tech_code.domain.dtos.requests.AcademicSetupUpRequest
 import com.amos_tech_code.domain.dtos.requests.ProgrammeRequest
 import com.amos_tech_code.domain.dtos.requests.UnitRequest

@@ -70,10 +70,11 @@ class AuthServiceImpl(
                     userType = UserRole.LECTURER
                 )
             }
-        } catch (e: AppException) {
-            throw e
         } catch (e: Exception) {
-            throw InternalServerException("An unknown error occurred while verifying your google account.")
+            when(e) {
+                is AppException -> throw e
+                else -> throw InternalServerException("An unknown error occurred while verifying your google account.")
+            }
         }
     }
 
@@ -117,10 +118,11 @@ class AuthServiceImpl(
                 fullName = savedStudent.fullName,
                 regNumber = savedStudent.registrationNumber,
             )
-        } catch (e: AppException) {
-            throw e
         } catch (e: Exception) {
-            throw InternalServerException("An error occurred during student registration.")
+            when(e) {
+                is AppException -> throw e
+                else -> throw InternalServerException("An error occurred during student registration.")
+            }
         }
 
     }
@@ -139,12 +141,8 @@ class AuthServiceImpl(
                 )
 
             val registeredDevice = studentRepository.findDeviceByStudentId(student.id)
-
-            if (registeredDevice == null) {
-                // Student exists but device record missing — this should not normally happen.
-                // Handle gracefully (log error, maybe create migration).
+                ?: // Student exists but device record missing — this should not normally happen.
                 throw IllegalStateException("No device registered for student: ${student.registrationNumber}")
-            }
 
             if (registeredDevice.deviceId == deviceInfo.deviceId) {
                 // ✅ Correct device → update lastSeen
@@ -163,10 +161,12 @@ class AuthServiceImpl(
                 fullName = student.fullName,
                 regNumber = student.registrationNumber
             )
-        } catch (ex: AppException) {
-            throw ex
+
         } catch (e: Exception) {
-            throw InternalServerException("An error occurred during student login. Please try again.")
+            when(e) {
+                is AppException -> throw e
+                else -> throw InternalServerException("An error occurred during student login. Please try again.")
+            }
         }
     }
 

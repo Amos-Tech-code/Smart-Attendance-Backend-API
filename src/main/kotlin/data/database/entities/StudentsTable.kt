@@ -46,6 +46,26 @@ object DevicesTable : Table("student_devices") {
 
 }
 
+// Student Programme Enrollment
+object StudentProgrammesTable : Table("student_programmes") {
+    val id: Column<UUID> = uuid("id").autoGenerate()
+    val studentId: Column<UUID> = uuid("student_id").references(StudentsTable.id, onDelete = ReferenceOption.CASCADE)
+    val programmeId: Column<UUID> = uuid("programme_id").references(ProgrammesTable.id, onDelete = ReferenceOption.CASCADE)
+    val universityId: Column<UUID> = uuid("university_id").references(UniversitiesTable.id, onDelete = ReferenceOption.CASCADE)
+    val yearOfStudy: Column<Int> = integer("year_of_study")
+    val academicYear: Column<String?> = varchar("academic_year", 9).nullable() // e.g., "2024-2025"
+    val isActive: Column<Boolean> = bool("is_active").default(true)
+    val enrolledAt: Column<LocalDateTime> = datetime("enrolled_at").clientDefault { now() }
+    val createdAt: Column<LocalDateTime> = datetime("created_at").clientDefault { now() }
+
+    override val primaryKey = PrimaryKey(id)
+
+    init {
+        uniqueIndex("unique_student_programme_year", studentId, programmeId, academicYear)
+        index(isUnique = false, studentId, isActive)
+    }
+}
+
 
 object SuspiciousLoginsTable : Table("suspicious_logins") {
     val id = uuid("id").autoGenerate()

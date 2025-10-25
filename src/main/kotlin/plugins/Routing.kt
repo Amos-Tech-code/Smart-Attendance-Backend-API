@@ -7,6 +7,7 @@ import com.amos_tech_code.routes.lecturerAcademicSetupRoutes
 import com.amos_tech_code.services.AttendanceSessionService
 import com.amos_tech_code.services.AuthService
 import com.amos_tech_code.services.LecturerAcademicService
+import com.amos_tech_code.services.MarkAttendanceService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
 import io.ktor.server.auth.authenticate
@@ -20,6 +21,7 @@ fun Application.configureRouting() {
     val authService by inject<AuthService>()
     val lecturerAcademicService by inject<LecturerAcademicService>()
     val attendanceSessionService by inject<AttendanceSessionService>()
+    val markAttendanceService by inject<MarkAttendanceService>()
 
     routing {
 
@@ -37,7 +39,7 @@ fun Application.configureRouting() {
 
         authenticate("jwt-auth") {
             lecturerAcademicSetupRoutes(lecturerAcademicService)
-            attendanceSessionRoutes(attendanceSessionService)
+            attendanceSessionRoutes(attendanceSessionService, markAttendanceService)
         }
 
     }

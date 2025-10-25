@@ -1,5 +1,6 @@
 package com.amos_tech_code.services.impl
 
+import com.amos_tech_code.domain.models.QRCodeData
 import com.amos_tech_code.services.QRCodeService
 import com.amos_tech_code.utils.InternalServerException
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -23,8 +24,8 @@ class QRCodeServiceImpl : QRCodeService {
 
     // Optimized for mobile scanning
     private companion object {
-        const val MOBILE_WIDTH = 350
-        const val MOBILE_HEIGHT = 350
+        const val MOBILE_WIDTH = 300
+        const val MOBILE_HEIGHT = 300
         const val MAX_DATA_LENGTH = 4000
     }
 
@@ -50,7 +51,7 @@ class QRCodeServiceImpl : QRCodeService {
             }
         } catch (e: Exception) {
             logger.error("Failed to generate QR code image: ${e.message}")
-            throw InternalServerException("Failed to generate QR code: ${e.message}")
+            throw InternalServerException("Failed to generate QR code")
         }
     }
 
@@ -82,13 +83,6 @@ class QRCodeServiceImpl : QRCodeService {
             logger.error("Failed to generate QR code data: ${e.message}")
             throw InternalServerException("Failed to generate QR code data: ${e.message}")
         }
-    }
-
-    /**
-     * Generate QR code optimized specifically for mobile scanning
-     */
-    fun generateMobileQRCode(data: String): ByteArray {
-        return generateQRCodeImage(data, MOBILE_WIDTH, MOBILE_HEIGHT)
     }
 
     /**
@@ -150,14 +144,3 @@ class QRCodeServiceImpl : QRCodeService {
         }
     }
 }
-
-/**
- * Data class for QR code content
- */
-data class QRCodeData(
-    val sessionCode: String,
-    val secretKey: String,
-    val sessionId: String,
-    val timestamp: Long,
-    val version: String
-)

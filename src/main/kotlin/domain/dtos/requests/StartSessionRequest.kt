@@ -21,6 +21,17 @@ enum class AttendanceMethodRequest {
 }
 
 
+@Serializable
+data class UpdateSessionRequest(
+    val programmeIds: List<String>? = null,
+    val unitId: String? = null,
+    val method: AttendanceMethodRequest? = null,
+    val locationLat: Double? = null,
+    val locationLng: Double? = null,
+    val radiusMeters: Int? = null,
+    val durationMinutes: Int? = null
+)
+
 
 @Serializable
 data class EndSessionRequest(

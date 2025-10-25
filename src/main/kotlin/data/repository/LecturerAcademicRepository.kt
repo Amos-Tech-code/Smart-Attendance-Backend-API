@@ -1,4 +1,4 @@
-package com.amos_tech_code.data.repository.impl
+package com.amos_tech_code.data.repository
 
 import com.amos_tech_code.data.database.entities.DepartmentsTable
 import com.amos_tech_code.data.database.entities.LecturerTeachingAssignmentsTable
@@ -14,21 +14,17 @@ import com.amos_tech_code.domain.dtos.response.AcademicSetupResponse
 import com.amos_tech_code.domain.dtos.response.ProgrammeResponse
 import com.amos_tech_code.domain.dtos.response.UnitResponse
 import com.amos_tech_code.domain.dtos.response.UniversitySetupResponse
-import com.amos_tech_code.utils.InternalServerException
 import com.amos_tech_code.utils.ResourceNotFoundException
 import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
-import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.upperCase
 import java.util.UUID
 
 
-class LecturerAcademicRepository {
+class LecturerAcademicRepository() {
 
     fun findOrCreateUniversity(universityName: String): UUID = exposedTransaction {
         val normalizedName = normalizeName(universityName)

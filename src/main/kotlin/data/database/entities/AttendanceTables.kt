@@ -69,7 +69,7 @@ object SessionProgrammesTable : Table("session_programmes") {
     val id: Column<UUID> = uuid("id").autoGenerate()
     val sessionId: Column<UUID> = uuid("session_id").references(AttendanceSessionsTable.id, onDelete = ReferenceOption.CASCADE)
     val programmeId: Column<UUID> = uuid("programme_id").references(ProgrammesTable.id, onDelete = ReferenceOption.CASCADE)
-    //val yearOfStudy: Column<Int> = integer("year_of_study")
+    val yearOfStudy: Column<Int> = integer("year_of_study")
     val createdAt: Column<LocalDateTime> = datetime("created_at").clientDefault { now() }
 
     override val primaryKey = PrimaryKey(id)
