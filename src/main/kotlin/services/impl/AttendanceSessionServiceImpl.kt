@@ -239,19 +239,9 @@ class AttendanceSessionServiceImpl(
                 throw ValidationException("No programmes associated with this session")
             }
 
-            // Get student's enrolled programmes
-            val studentEnrolledProgrammes = programmeRepository.getStudentEnrolledProgrammes(studentId, session.universityId)
-
-            // Filter matching programmes
-            val availableProgrammes = sessionProgrammes.filter { sessionProgramme ->
-                studentEnrolledProgrammes.any { enrolledProgramme ->
-                    enrolledProgramme.programmeId == sessionProgramme.programmeId
-                }
-            }
-
             return VerifyAttendanceResponse(
-                requiresProgrammeSelection = availableProgrammes.size > 1,
-                availableProgrammes = availableProgrammes.map { programme ->
+                requiresProgrammeSelection = sessionProgrammes.size > 1,
+                availableProgrammes = sessionProgrammes.map { programme ->
                     ProgrammeInfoResponse(
                         id = programme.programmeId.toString(),
                         name = programme.programmeName,
