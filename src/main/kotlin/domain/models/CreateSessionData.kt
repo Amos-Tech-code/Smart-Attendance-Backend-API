@@ -8,14 +8,15 @@ data class CreateSessionData(
     val universityId: UUID,
     val unitId: UUID,
     val sessionCode: String,
-    val secretKey: String,
-    val attendanceMethod: AttendanceMethod,
     val qrCodeUrl: String?,
-    val lecturerLatitude: Double,
-    val lecturerLongitude: Double,
+    val isLocationRequired: Boolean,
+    val allowedMethod: AttendanceMethod,
+    val lecturerLatitude: Double?,
+    val lecturerLongitude: Double?,
     val locationRadius: Int,
-    val scheduledStartTime: LocalDateTime,
-    val actualStartTime: LocalDateTime,
+    val scheduledStartTime: LocalDateTime?,
+    val actualStartTime: LocalDateTime?,
     val scheduledEndTime: LocalDateTime,
-    val durationMinutes: Int
+    val durationMinutes: Int,
+    val sessionStatus: AttendanceSessionStatus
 )

@@ -57,15 +57,15 @@ class QRCodeServiceImpl : QRCodeService {
 
     override fun generateQRCodeData(
         sessionCode: String,
-        secretKey: String,
+        unitCode: String,
         sessionId: UUID
     ): String {
-        validateSessionData(sessionCode, secretKey, sessionId)
+        validateSessionData(sessionCode, unitCode, sessionId)
 
         return try {
             val qrData = QRCodeData(
                 sessionCode = sessionCode,
-                secretKey = secretKey,
+                unitCode = unitCode,
                 sessionId = sessionId.toString(),
                 timestamp = System.currentTimeMillis(),
                 version = "1.0"
@@ -91,7 +91,7 @@ class QRCodeServiceImpl : QRCodeService {
     fun validateQRCodeData(qrDataJson: String): Boolean {
         return try {
             val qrData = jsonMapper.readValue(qrDataJson, QRCodeData::class.java)
-            validateSessionData(qrData.sessionCode, qrData.secretKey, UUID.fromString(qrData.sessionId))
+            validateSessionData(qrData.sessionCode, qrData.unitCode, UUID.fromString(qrData.sessionId))
             true
         } catch (e: Exception) {
             logger.warn("Invalid QR code data: ${e.message}")

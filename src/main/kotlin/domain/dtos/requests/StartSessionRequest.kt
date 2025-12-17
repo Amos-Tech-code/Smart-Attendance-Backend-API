@@ -7,17 +7,25 @@ data class StartSessionRequest(
     val universityId: String,
     val programmeIds: List<String>,
     val unitId: String,
-    val method: AttendanceMethodRequest,
-    val locationLat: Double,
-    val locationLng: Double,
+    val allowedMethod: AttendanceMethodRequest,
+    val isLocationRequired: Boolean,
+    val location: AttendanceLocationRequest? = null,
     val radiusMeters: Int = 50,
-    val durationMinutes: Int = 60
+    val durationMinutes: Int = 60,
+    val scheduledStartTime: String? = null
+)
+
+@Serializable
+data class AttendanceLocationRequest(
+    val latitude: Double,
+    val longitude: Double
 )
 
 @Serializable
 enum class AttendanceMethodRequest {
     QR_CODE,       // Students scan QR projected/displayed by lecturer
     MANUAL_CODE,   // Students manually type in a generated session code
+    ANY            // Students can use both methods
 }
 
 
@@ -25,13 +33,13 @@ enum class AttendanceMethodRequest {
 data class UpdateSessionRequest(
     val programmeIds: List<String>? = null,
     val unitId: String? = null,
-    val method: AttendanceMethodRequest? = null,
-    val locationLat: Double? = null,
-    val locationLng: Double? = null,
+    val allowedMethod: AttendanceMethodRequest? = null,
+    val isLocationRequired: Boolean? = null,
+    val location: AttendanceLocationRequest? = null,
     val radiusMeters: Int? = null,
-    val durationMinutes: Int? = null
+    val durationMinutes: Int? = null,
+    val scheduledStartTime: String? = null
 )
-
 
 @Serializable
 data class EndSessionRequest(

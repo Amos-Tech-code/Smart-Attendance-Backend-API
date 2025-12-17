@@ -9,7 +9,8 @@ enum class UserRole {
 enum class AttendanceMethod {
     QR_CODE, // Qr Code scan
     MANUAL_CODE, // Manually entering session code if allowed
-    LECTURER_MANUAL // Lecturer manually signing for student
+    LECTURER_MANUAL, // Lecturer manually signing for student
+    ANY // All methods allowed
 }
 
 enum class AttendanceSessionStatus {

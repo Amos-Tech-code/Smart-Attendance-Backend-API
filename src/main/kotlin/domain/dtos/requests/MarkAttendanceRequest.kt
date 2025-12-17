@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class MarkAttendanceRequest(
     val sessionCode: String,
-    val secretKey: String,
+    val unitCode: String,
     val deviceId: String,
     val programmeId: String? = null, // Required only for first-time attendance with multiple programmes
     val studentLat: Double? = null,
@@ -16,5 +16,5 @@ data class MarkAttendanceRequest(
 @Serializable
 data class VerifySessionRequest(
     val sessionCode: String,
-    val secretKey: String
+    val unitCode: String
 )

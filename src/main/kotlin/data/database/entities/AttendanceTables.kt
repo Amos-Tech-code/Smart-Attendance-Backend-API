@@ -19,29 +19,29 @@ object AttendanceSessionsTable : Table("attendance_sessions") {
 
     // Session Identification
     val sessionCode: Column<String> = varchar("session_code", 6).uniqueIndex() // 6-digit unique code
-    val secretKey: Column<String> = varchar("secret_key", 8) // 8-char secret for QR verification
     val qrCodeUrl: Column<String?> = text("qr_code_url").nullable() // CDN URL for QR code image
 
     // Session Configuration
-    val attendanceMethod: Column<AttendanceMethod> = customEnumeration(
-        "attendance_method",
+    val allowedMethod: Column<AttendanceMethod> = customEnumeration(
+        "allowed_method",
         "VARCHAR(20)",
         { value -> AttendanceMethod.valueOf(value as String) },
         { it.name }
     )
-    val lecturerLatitude: Column<Double> = double("lecturer_latitude")
-    val lecturerLongitude: Column<Double> = double("lecturer_longitude")
+    val isLocationRequired: Column<Boolean> = bool("is_location_required").default(false)
+    val lecturerLatitude: Column<Double?> = double("lecturer_latitude").nullable()
+    val lecturerLongitude: Column<Double?> = double("lecturer_longitude").nullable()
     val locationRadius: Column<Int> = integer("location_radius").default(50) // meters
 
     // Time Management
-    val scheduledStartTime: Column<LocalDateTime> = datetime("scheduled_start_time")
-    val actualStartTime: Column<LocalDateTime> = datetime("actual_start_time").clientDefault { now() }
+    val scheduledStartTime: Column<LocalDateTime?> = datetime("scheduled_start_time").nullable()
+    val actualStartTime: Column<LocalDateTime?> = datetime("actual_start_time").nullable()
     val scheduledEndTime: Column<LocalDateTime> = datetime("scheduled_end_time")
     val actualEndTime: Column<LocalDateTime?> = datetime("actual_end_time").nullable()
     val durationMinutes: Column<Int> = integer("duration_minutes").default(60)
 
     // Security & Limits
-    val maxAttempts: Column<Int> = integer("max_attempts").default(3)
+    val maxAttempts: Column<Int> = integer("max_attempts").default(5)
     val attemptCount: Column<Int> = integer("attempt_count").default(0)
     val isLocked: Column<Boolean> = bool("is_locked").default(false)
 
@@ -94,7 +94,6 @@ object AttendanceRecordsTable : Table("attendance_records") {
         { it.name }
     )
     val sessionCode: Column<String> = varchar("session_code", 6) // Code used for attendance
-    val secretKey: Column<String> = varchar("secret_key", 8) // Secret used for verification
 
     // Location Verification
     val studentLatitude: Column<Double?> = double("student_latitude").nullable()

@@ -32,7 +32,7 @@ class MarkAttendanceServiceImpl(
             // Verify session exists and is active
             val session = attendanceSessionRepository.getActiveSessionByCodeAndSecret(
                 request.sessionCode,
-                request.secretKey
+                request.unitCode
             ) ?: return createErrorResponse("Invalid session or session has ended")
 
             // Simple duplicate check
@@ -165,7 +165,7 @@ class MarkAttendanceServiceImpl(
             sessionId = session.id,
             programmeId = programmeId,
             sessionCode = request.sessionCode,
-            secretKey = request.secretKey,
+            secretKey = request.unitCode,
             deviceId = request.deviceId,
             studentLat = request.studentLat,
             studentLng = request.studentLng,
@@ -250,10 +250,10 @@ class MarkAttendanceServiceImpl(
         if (!request.sessionCode.matches(Regex("\\d{6}"))) {
             throw ValidationException("Session code must contain only digits")
         }
-        if (request.secretKey.isBlank()) {
+        if (request.unitCode.isBlank()) {
             throw ValidationException("Secret key is required")
         }
-        if (request.secretKey.length != 8) {
+        if (request.unitCode.length != 8) {
             throw ValidationException("Secret key must be 8 characters")
         }
         if (request.deviceId.isBlank()) {

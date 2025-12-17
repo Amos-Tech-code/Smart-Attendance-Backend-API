@@ -74,7 +74,7 @@ object DatabaseFactory {
 
                 )
 
-                // updateOwnerPassword()
+                // updateAdminPassword()
             }
         } catch (e: Exception) {
             println("Database initialization failed: ${e.message}")

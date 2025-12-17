@@ -25,7 +25,7 @@ fun Route.attendanceSessionRoutes(
 
     route("api/v1/attendance") {
 
-        route("/sessions") {
+        route("/session") {
 
             post("/start") {
                 val lecturerId = call.getUserIdFromJWT() ?: return@post call.respondBadRequest("Lecturer ID is required")

@@ -12,6 +12,7 @@ import com.amos_tech_code.domain.models.PreviousAttendance
 import com.amos_tech_code.domain.models.SessionProgramme
 import com.amos_tech_code.domain.models.UpdateSessionData
 import com.amos_tech_code.utils.AuthorizationException
+import io.ktor.server.plugins.NotFoundException
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import java.time.LocalDateTime
@@ -28,8 +29,7 @@ class AttendanceSessionRepository() {
             it[universityId] = sessionData.universityId
             it[unitId] = sessionData.unitId
             it[sessionCode] = sessionData.sessionCode
-            it[secretKey] = sessionData.secretKey
-            it[attendanceMethod] = sessionData.attendanceMethod
+            it[allowedMethod] = sessionData.allowedMethod
             it[qrCodeUrl] = sessionData.qrCodeUrl
             it[lecturerLatitude] = sessionData.lecturerLatitude
             it[lecturerLongitude] = sessionData.lecturerLongitude
@@ -38,7 +38,7 @@ class AttendanceSessionRepository() {
             it[actualStartTime] = sessionData.actualStartTime
             it[scheduledEndTime] = sessionData.scheduledEndTime
             it[durationMinutes] = sessionData.durationMinutes
-            it[status] = AttendanceSessionStatus.ACTIVE
+            it[status] = sessionData.sessionStatus
         }
 
         sessionId
@@ -119,8 +119,8 @@ class AttendanceSessionRepository() {
             updateData.unitId?.let { unitId ->
                 it[AttendanceSessionsTable.unitId] = unitId
             }
-            updateData.attendanceMethod?.let { method ->
-                it[AttendanceSessionsTable.attendanceMethod] = method
+            updateData.allowedMethod?.let { method ->
+                it[AttendanceSessionsTable.allowedMethod] = method
             }
             updateData.lecturerLatitude?.let { lat ->
                 it[AttendanceSessionsTable.lecturerLatitude] = lat
@@ -245,9 +245,8 @@ class AttendanceSessionRepository() {
             SessionResponse(
                 sessionId = session[AttendanceSessionsTable.id].toString(),
                 sessionCode = session[AttendanceSessionsTable.sessionCode],
-                secretKey = session[AttendanceSessionsTable.secretKey],
                 qrCodeUrl = session[AttendanceSessionsTable.qrCodeUrl],
-                method = session[AttendanceSessionsTable.attendanceMethod],
+                method = session[AttendanceSessionsTable.allowedMethod],
                 universityId = session[AttendanceSessionsTable.universityId].toString(),
                 programmes = programmes,
                 unit = UnitInfo(
@@ -268,6 +267,15 @@ class AttendanceSessionRepository() {
                 status = session[AttendanceSessionsTable.status]
             )
         }
+    }
+
+    fun findUnitCodeById(unitId: UUID) : String = exposedTransaction {
+        UnitsTable
+            .select(UnitsTable.code)
+            .where { UnitsTable.id eq unitId }
+            .map { it[UnitsTable.code] }
+            .singleOrNull()
+            ?: throw NotFoundException("Unit not found")
     }
 
     fun getSessionQrCodeUrl(sessionId: UUID): String? = exposedTransaction {
@@ -301,9 +309,8 @@ class AttendanceSessionRepository() {
                 SessionResponse(
                     sessionId = sessionId.toString(),
                     sessionCode = session[AttendanceSessionsTable.sessionCode],
-                    secretKey = session[AttendanceSessionsTable.secretKey],
                     qrCodeUrl = session[AttendanceSessionsTable.qrCodeUrl],
-                    method = when (session[AttendanceSessionsTable.attendanceMethod]) {
+                    method = when (session[AttendanceSessionsTable.allowedMethod]) {
                         AttendanceMethod.QR_CODE -> AttendanceMethod.QR_CODE
                         AttendanceMethod.MANUAL_CODE -> AttendanceMethod.MANUAL_CODE
                         else -> AttendanceMethod.QR_CODE
@@ -368,7 +375,6 @@ class AttendanceSessionRepository() {
         sessionId: UUID,
         programmeId: UUID,
         sessionCode: String,
-        secretKey: String,
         deviceId: String,
         studentLat: Double?,
         studentLng: Double?,
@@ -385,19 +391,26 @@ class AttendanceSessionRepository() {
                 .singleOrNull()
 
             session?.let {
-                calculateDistance(
-                    it[AttendanceSessionsTable.lecturerLatitude],
-                    it[AttendanceSessionsTable.lecturerLongitude],
-                    studentLat,
-                    studentLng
-                )
+                val lecturerLat = it[AttendanceSessionsTable.lecturerLatitude]
+                val lecturerLng = it[AttendanceSessionsTable.lecturerLongitude]
+
+                if (lecturerLat != null && lecturerLng != null) {
+                    calculateDistance(
+                        lecturerLat,
+                        lecturerLng,
+                        studentLat,
+                        studentLng
+                    )
+                } else {
+                    null
+                }
             }
         } else null
 
         // Get attendance method from session
         val attendanceMethod = AttendanceSessionsTable
             .selectAll().where { AttendanceSessionsTable.id eq sessionId }
-            .single()[AttendanceSessionsTable.attendanceMethod]
+            .single()[AttendanceSessionsTable.allowedMethod]
 
         // Get expected device ID
         val expectedDeviceId = DevicesTable
@@ -426,7 +439,6 @@ class AttendanceSessionRepository() {
             it[AttendanceRecordsTable.programmeId] = programmeId
             it[AttendanceRecordsTable.attendanceMethodUsed] = attendanceMethod
             it[AttendanceRecordsTable.sessionCode] = sessionCode
-            it[AttendanceRecordsTable.secretKey] = secretKey
             it[AttendanceRecordsTable.studentLatitude] = studentLat
             it[AttendanceRecordsTable.studentLongitude] = studentLng
             it[AttendanceRecordsTable.distanceFromLecturer] = distance
@@ -448,22 +460,24 @@ class AttendanceSessionRepository() {
         )
     }
 
-    fun getActiveSessionByCodeAndSecret(sessionCode: String, secretKey: String): AttendanceSession? =
+    fun getActiveSessionBySessionCodeAndUnitCode(sessionCode: String, unitCode: String): AttendanceSession? =
         exposedTransaction {
             AttendanceSessionsTable
                 .join(UnitsTable, JoinType.INNER, AttendanceSessionsTable.unitId, UnitsTable.id)
                 .join(LecturersTable, JoinType.INNER, AttendanceSessionsTable.lecturerId, LecturersTable.id)
-                .selectAll().where {
+                .selectAll()
+                .where {
                     (AttendanceSessionsTable.sessionCode eq sessionCode) and
-                            (AttendanceSessionsTable.secretKey eq secretKey) and
+                            (UnitsTable.code eq unitCode) and
                             (AttendanceSessionsTable.status eq AttendanceSessionStatus.ACTIVE) and
                             (AttendanceSessionsTable.isLocked eq false)
                 }
+                .orderBy(AttendanceSessionsTable.createdAt to SortOrder.DESC)
+                .limit(1)
                 .map { row ->
                     AttendanceSession(
                         id = row[AttendanceSessionsTable.id],
                         sessionCode = row[AttendanceSessionsTable.sessionCode],
-                        secretKey = row[AttendanceSessionsTable.secretKey],
                         unitId = row[AttendanceSessionsTable.unitId],
                         universityId = row[AttendanceSessionsTable.universityId],
                         lecturerId = row[AttendanceSessionsTable.lecturerId],
@@ -480,10 +494,7 @@ class AttendanceSessionRepository() {
 
     fun isFirstAttendance(studentId: UUID, sessionId: UUID): Boolean = exposedTransaction {
         AttendanceRecordsTable
-            .selectAll().where {
-                (AttendanceRecordsTable.studentId eq studentId) and
-                        (AttendanceRecordsTable.sessionId eq sessionId)
-            }
+            .selectAll().where { AttendanceRecordsTable.studentId eq studentId }
             .count() == 0L
     }
 

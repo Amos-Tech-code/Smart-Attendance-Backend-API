@@ -8,8 +8,7 @@ import kotlinx.serialization.Serializable
 data class SessionResponse(
     val sessionId: String,
     val sessionCode: String, // 6-digit code
-    val secretKey: String, // 8-char secret
-    val qrCodeUrl: String?, // CDN URL if QR method
+    val qrCodeUrl: String?,
     val method: AttendanceMethod,
     val universityId: String,
     val programmes: List<ProgrammeInfo>,
@@ -35,8 +34,8 @@ data class UnitInfo(
 
 @Serializable
 data class LocationInfo(
-    val latitude: Double,
-    val longitude: Double,
+    val latitude: Double?,
+    val longitude: Double?,
     val radiusMeters: Int
 )
 

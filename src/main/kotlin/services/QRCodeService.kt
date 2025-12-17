@@ -6,6 +6,6 @@ interface QRCodeService {
 
     fun generateQRCodeImage(data: String, width: Int, height: Int): ByteArray
 
-    fun generateQRCodeData(sessionCode: String, secretKey: String, sessionId: UUID): String
+    fun generateQRCodeData(sessionCode: String, unitCode: String, sessionId: UUID): String
 
 }

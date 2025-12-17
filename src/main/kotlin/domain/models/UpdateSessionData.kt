@@ -7,7 +7,8 @@ import java.util.UUID
 data class UpdateSessionData(
     val programmeIds: List<UUID>? = null,
     val unitId: UUID? = null,
-    val attendanceMethod: AttendanceMethod? = null,
+    val allowedMethod: AttendanceMethod? = null,
+    val isLocationRequired: Boolean? = null,
     val lecturerLatitude: Double? = null,
     val lecturerLongitude: Double? = null,
     val locationRadius: Int? = null,
