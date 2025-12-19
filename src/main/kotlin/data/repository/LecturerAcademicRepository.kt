@@ -1,5 +1,6 @@
 package com.amos_tech_code.data.repository
 
+import com.amos_tech_code.data.database.entities.AcademicTermsTable
 import com.amos_tech_code.data.database.entities.DepartmentsTable
 import com.amos_tech_code.data.database.entities.LecturerTeachingAssignmentsTable
 import com.amos_tech_code.data.database.entities.LecturerUniversitiesTable
@@ -9,15 +10,18 @@ import com.amos_tech_code.data.database.entities.ProgrammesTable
 import com.amos_tech_code.data.database.entities.UnitsTable
 import com.amos_tech_code.data.database.entities.UniversitiesTable
 import com.amos_tech_code.data.database.utils.exposedTransaction
-import com.amos_tech_code.domain.dtos.requests.UnitRequest
+import com.amos_tech_code.domain.dtos.requests.UnitSetupRequest
 import com.amos_tech_code.domain.dtos.response.AcademicSetupResponse
 import com.amos_tech_code.domain.dtos.response.ProgrammeResponse
 import com.amos_tech_code.domain.dtos.response.UnitResponse
 import com.amos_tech_code.domain.dtos.response.UniversitySetupResponse
+import com.amos_tech_code.domain.models.ResolvedUnit
 import com.amos_tech_code.utils.ResourceNotFoundException
+import org.jetbrains.exposed.exceptions.ExposedSQLException
 import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.SortOrder
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.batchInsert
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.update
@@ -71,7 +75,6 @@ class LecturerAcademicRepository() {
         universityId: UUID,
         departmentId: UUID,
         programmeName: String,
-        yearOfStudy: Int
     ): UUID = exposedTransaction {
         val normalizedName = normalizeName(programmeName)
 
@@ -97,106 +100,129 @@ class LecturerAcademicRepository() {
     }
 
     // Batch operation for units
-    fun findOrCreateUnitsBatch(universityId: UUID, unitRequests: List<UnitRequest>): Map<String, UUID> = exposedTransaction {
-        if (unitRequests.isEmpty()) return@exposedTransaction emptyMap()
+    fun findOrCreateUnitsBatch(
+        universityId: UUID,
+        departmentId: UUID,
+        unitRequests: List<UnitSetupRequest>
+    ): List<ResolvedUnit> = exposedTransaction {
+        if (unitRequests.isEmpty()) return@exposedTransaction emptyList()
 
-        val normalizedUnits = unitRequests.associate { request ->
-            normalizeCode(request.code) to normalizeName(request.name)
+        val normalizedUnits = unitRequests.associateBy { request ->
+            normalizeCode(request.code)
         }
 
         // Single query to find all existing units
         val existingUnits = UnitsTable
             .selectAll().where {
                 (UnitsTable.universityId eq universityId) and
-                        (UnitsTable.code inList normalizedUnits.keys)
+                (UnitsTable.departmentId eq departmentId) and
+                (UnitsTable.code inList normalizedUnits.keys)
             }
-            .associate { row ->
-                row[UnitsTable.code] to Pair(row[UnitsTable.id], row[UnitsTable.name])
-            }
+            .associateBy { it[UnitsTable.code] }
 
-        val result = mutableMapOf<String, UUID>()
-        val unitsToUpdate = mutableListOf<Pair<UUID, String>>()
-        val unitsToCreate = mutableListOf<Pair<String, String>>()
+        val resolvedUnits = mutableListOf<ResolvedUnit>()
 
         // Separate existing units that need updates and new units to create
-        normalizedUnits.forEach { (code, normalizedName) ->
-            val existingUnit = existingUnits[code]
-            if (existingUnit != null) {
-                val (unitId, currentName) = existingUnit
-                result[code] = unitId
+        normalizedUnits.forEach { (code, request) ->
+            val row = existingUnits[code]
 
-                // Check if name needs update (using normalized comparison)
-                if (normalizeName(currentName) != normalizedName) {
-                    unitsToUpdate.add(unitId to normalizedName)
+            val unitId = if (row != null) {
+                // Update name if needed
+                if (normalizeName(row[UnitsTable.name]) != normalizeName(request.name)) {
+                    UnitsTable.update({ UnitsTable.id eq row[UnitsTable.id] }) {
+                        it[name] = normalizeName(request.name)
+                    }
                 }
+                row[UnitsTable.id]
             } else {
-                unitsToCreate.add(code to normalizedName)
-            }
-        }
-
-        // Batch update units that need name changes
-        if (unitsToUpdate.isNotEmpty()) {
-            unitsToUpdate.forEach { (unitId, newName) ->
-                UnitsTable.update({ UnitsTable.id eq unitId }) {
-                    it[name] = newName
-                }
-            }
-        }
-
-        // Batch create new units
-        if (unitsToCreate.isNotEmpty()) {
-            unitsToCreate.forEach { (code, name) ->
-                val unitId = UUID.randomUUID()
-                result[code] = unitId
+                val newId = UUID.randomUUID()
                 UnitsTable.insert {
-                    it[id] = unitId
+                    it[id] = newId
                     it[UnitsTable.universityId] = universityId
+                    it[UnitsTable.departmentId] = departmentId
                     it[UnitsTable.code] = code
-                    it[UnitsTable.name] = name
+                    it[name] = normalizeName(request.name)
                 }
+                newId
             }
+
+            resolvedUnits += ResolvedUnit(
+                unitId = unitId,
+                code = code,
+                semester = request.semester,
+            )
         }
 
-        result
+        resolvedUnits
+    }
+
+    fun findOrCreateAcademicTerm(
+        universityId: UUID,
+        academicYear: String,
+        semester: Int
+    ): UUID = exposedTransaction {
+        // 1. Try to find existing term
+        AcademicTermsTable
+            .selectAll().where {
+                (AcademicTermsTable.universityId eq universityId) and
+                        (AcademicTermsTable.academicYear eq academicYear) and
+                        (AcademicTermsTable.semester eq semester)
+            }
+            .limit(1)
+            .singleOrNull()
+            ?.let { return@exposedTransaction it[AcademicTermsTable.id] }
+
+        // 2. Create if missing
+        return@exposedTransaction try {
+            AcademicTermsTable.insert {
+                it[this.universityId] = universityId
+                it[this.academicYear] = academicYear
+                it[this.semester] = semester
+                it[this.isActive] = true
+            }.resultedValues?.firstOrNull()?.get(AcademicTermsTable.id) ?: throw IllegalStateException("Failed to insert academic term.")
+        } catch (ex: ExposedSQLException) {
+            // 3. Handle race condition safely
+            AcademicTermsTable
+                .selectAll().where {
+                    (AcademicTermsTable.universityId eq universityId) and
+                            (AcademicTermsTable.academicYear eq academicYear) and
+                            (AcademicTermsTable.semester eq semester)
+                }
+                .limit(1)
+                .single()[AcademicTermsTable.id]
+        }
     }
 
     // Batch operation for programme-unit links
-    fun linkProgrammeUnitsBatch(programmeId: UUID, unitIds: Map<String, UUID>, yearOfStudy: Int) = exposedTransaction {
-        if (unitIds.isEmpty()) return@exposedTransaction
+    fun linkProgrammeUnitsBatch(
+        programmeId: UUID,
+        units: List<ResolvedUnit>,
+        yearOfStudy: Int
+    ) {
+        if (units.isEmpty()) return
 
-        // Single query to find existing links
-        val existingLinks = ProgrammeUnitsTable
-            .selectAll().where {
-                (ProgrammeUnitsTable.programmeId eq programmeId) and
-                        (ProgrammeUnitsTable.unitId inList unitIds.values) and
-                        (ProgrammeUnitsTable.yearOfStudy eq yearOfStudy)
-            }
-            .map { it[ProgrammeUnitsTable.unitId] }
-            .toSet()
-
-        // Batch create missing links
-        val linksToCreate = unitIds.values.filter { it !in existingLinks }
-        if (linksToCreate.isNotEmpty()) {
-            linksToCreate.forEach { unitId ->
-                ProgrammeUnitsTable.insert {
-                    it[id] = UUID.randomUUID()
-                    it[ProgrammeUnitsTable.programmeId] = programmeId
-                    it[ProgrammeUnitsTable.unitId] = unitId
-                    it[ProgrammeUnitsTable.yearOfStudy] = yearOfStudy
-                }
-            }
+        ProgrammeUnitsTable.batchInsert(units, ignore = true) { unit ->
+            this[ProgrammeUnitsTable.programmeId] = programmeId
+            this[ProgrammeUnitsTable.unitId] = unit.unitId
+            this[ProgrammeUnitsTable.yearOfStudy] = yearOfStudy
+            this[ProgrammeUnitsTable.semester] = unit.semester
         }
+
     }
+
 
     // Batch operation for teaching assignments
     fun createTeachingAssignmentsBatch(
         lecturerId: UUID,
         universityId: UUID,
         programmeId: UUID,
-        unitIds: Map<String, UUID>,
+        units: List<ResolvedUnit>,
+        academicTermId: UUID,
         yearOfStudy: Int
     ) = exposedTransaction {
-        if (unitIds.isEmpty()) return@exposedTransaction
+        if (units.isEmpty()) return@exposedTransaction
+
+        val unitIds = units.map { it.unitId }
 
         // Single query to find existing assignments
         val existingAssignments = LecturerTeachingAssignmentsTable
@@ -204,27 +230,24 @@ class LecturerAcademicRepository() {
                 (LecturerTeachingAssignmentsTable.lecturerId eq lecturerId) and
                         (LecturerTeachingAssignmentsTable.universityId eq universityId) and
                         (LecturerTeachingAssignmentsTable.programmeId eq programmeId) and
-                        (LecturerTeachingAssignmentsTable.unitId inList unitIds.values) and
+                        (LecturerTeachingAssignmentsTable.unitId inList unitIds) and
                         (LecturerTeachingAssignmentsTable.yearOfStudy eq yearOfStudy)
             }
             .map { it[LecturerTeachingAssignmentsTable.unitId] }
             .toSet()
 
         // Batch create missing assignments
-        val assignmentsToCreate = unitIds.values.filter { it !in existingAssignments }
-        if (assignmentsToCreate.isNotEmpty()) {
-            assignmentsToCreate.forEach { unitId ->
-                LecturerTeachingAssignmentsTable.insert {
-                    it[id] = UUID.randomUUID()
-                    it[LecturerTeachingAssignmentsTable.lecturerId] = lecturerId
-                    it[LecturerTeachingAssignmentsTable.universityId] = universityId
-                    it[LecturerTeachingAssignmentsTable.programmeId] = programmeId
-                    it[LecturerTeachingAssignmentsTable.unitId] = unitId
-                    it[LecturerTeachingAssignmentsTable.yearOfStudy] = yearOfStudy
-                    it[LecturerTeachingAssignmentsTable.academicYear] = null
-                }
-            }
+        val assignmentsToCreate = unitIds.filterNot { it in existingAssignments }
+
+        LecturerTeachingAssignmentsTable.batchInsert(assignmentsToCreate) { unitId ->
+            this[LecturerTeachingAssignmentsTable.lecturerId] = lecturerId
+            this[LecturerTeachingAssignmentsTable.universityId] = universityId
+            this[LecturerTeachingAssignmentsTable.programmeId] = programmeId
+            this[LecturerTeachingAssignmentsTable.unitId] = unitId
+            this[LecturerTeachingAssignmentsTable.academicTermId] = academicTermId
+            this[LecturerTeachingAssignmentsTable.yearOfStudy] = yearOfStudy
         }
+
     }
 
     fun linkLecturerToUniversity(lecturerId: UUID, universityId: UUID) = exposedTransaction {
@@ -358,7 +381,6 @@ class LecturerAcademicRepository() {
                 )
             }
     }
-
 
     // Enhanced normalization functions
     private fun normalizeName(name: String): String {

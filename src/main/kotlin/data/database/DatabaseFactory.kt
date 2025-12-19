@@ -1,8 +1,11 @@
 package com.amos_tech_code.data.database
 
 import com.amos_tech_code.config.AppConfig
+import com.amos_tech_code.data.database.entities.AcademicTermsTable
+import com.amos_tech_code.data.database.entities.AttendanceExportsTable
 import com.amos_tech_code.data.database.entities.AttendanceRecordsTable
 import com.amos_tech_code.data.database.entities.AttendanceSessionsTable
+import com.amos_tech_code.data.database.entities.AttendanceSummariesTable
 import com.amos_tech_code.data.database.entities.DepartmentsTable
 import com.amos_tech_code.data.database.entities.DevicesTable
 import com.amos_tech_code.data.database.entities.LecturerTeachingAssignmentsTable
@@ -11,7 +14,7 @@ import com.amos_tech_code.data.database.entities.LecturersTable
 import com.amos_tech_code.data.database.entities.ProgrammeUnitsTable
 import com.amos_tech_code.data.database.entities.ProgrammesTable
 import com.amos_tech_code.data.database.entities.SessionProgrammesTable
-import com.amos_tech_code.data.database.entities.StudentProgrammesTable
+import com.amos_tech_code.data.database.entities.StudentEnrollmentsTable
 import com.amos_tech_code.data.database.entities.StudentsTable
 import com.amos_tech_code.data.database.entities.SuspiciousLoginsTable
 import com.amos_tech_code.data.database.entities.UnitsTable
@@ -51,26 +54,31 @@ object DatabaseFactory {
             transaction {
                 // Create tables if they don't exist
                 SchemaUtils.createMissingTablesAndColumns(
-                    // Students
-                    StudentsTable,
-                    DevicesTable,
-                    StudentProgrammesTable,
-                    SuspiciousLoginsTable,
-
-                    // Lecturers
-                    LecturersTable,
+                    // System Master Tables
                     UniversitiesTable,
-                    LecturerUniversitiesTable,
+                    AcademicTermsTable,
                     ProgrammesTable,
                     DepartmentsTable,
                     UnitsTable,
                     ProgrammeUnitsTable,
+
+                    // Students
+                    StudentsTable,
+                    DevicesTable,
+                    SuspiciousLoginsTable,
+                    StudentEnrollmentsTable,
+
+                    // Lecturers
+                    LecturersTable,
+                    LecturerUniversitiesTable,
                     LecturerTeachingAssignmentsTable,
 
                     // Attendance
                     AttendanceSessionsTable,
                     SessionProgrammesTable,
-                    AttendanceRecordsTable
+                    AttendanceRecordsTable,
+                    AttendanceExportsTable,
+                    AttendanceSummariesTable
 
                 )
 

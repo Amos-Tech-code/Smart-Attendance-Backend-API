@@ -3,25 +3,33 @@ package com.amos_tech_code.domain.dtos.requests
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class AcademicSetupUpRequest(
-    val universityName: String,
-    val programmes: List<ProgrammeRequest>,
+data class AcademicSetUpRequest(
+    val universityId: String?,          // Existing or null
+    val universityName: String?,         // Required if universityId == null
+    val academicYear: String,           // "2024-2025"
+    val semester: Int,                  // 1 or 2
+
+    val programmes: List<ProgrammeSetupRequest>,
 )
 
 
 @Serializable
-data class ProgrammeRequest(
-    val name: String,
-    val department: String,
-    val yearOfStudy: Int,
-    val units: List<UnitRequest>,
-    val programmeId: String? = null // For existing programmes, null for new ones
+data class ProgrammeSetupRequest(
+    val programmeId: String?,           // Existing or null
+    val programmeName: String,         // Required if programmeId == null
+    val departmentId: String?,          // Existing or null
+    val departmentName: String,        // Required if departmentId == null
+
+    val yearOfStudy: Int,               // Contextual year
+    val units: List<UnitSetupRequest>
 )
 
 
 @Serializable
-data class UnitRequest(
+data class UnitSetupRequest(
+    val unitId: String?,                // Existing or null
     val code: String,
     val name: String,
-    val unitId: String? = null // For existing units, null for new ones
+
+    val semester: Int                   // REQUIRED (1 or 2)
 )

@@ -2,8 +2,9 @@ package com.amos_tech_code.data.repository
 
 import com.amos_tech_code.data.database.entities.ProgrammeUnitsTable
 import com.amos_tech_code.data.database.entities.ProgrammesTable
-import com.amos_tech_code.data.database.entities.StudentProgrammesTable
+import com.amos_tech_code.data.database.entities.StudentEnrollmentsTable
 import com.amos_tech_code.data.database.utils.exposedTransaction
+import com.amos_tech_code.domain.models.StudentEnrollmentSource
 import com.amos_tech_code.domain.models.StudentProgramme
 import org.jetbrains.exposed.sql.JoinType
 import org.jetbrains.exposed.sql.SortOrder
@@ -16,46 +17,35 @@ import java.util.UUID
 
 class ProgrammeRepository() {
 
-    fun getStudentEnrolledProgrammes(studentId: UUID, universityId: UUID): List<StudentProgramme> =
-        exposedTransaction {
-            StudentProgrammesTable
-                .join(ProgrammesTable, JoinType.INNER, StudentProgrammesTable.programmeId, ProgrammesTable.id)
-                .selectAll().where {
-                    (StudentProgrammesTable.studentId eq studentId) and
-                            (StudentProgrammesTable.universityId eq universityId) and
-                            (StudentProgrammesTable.isActive eq true)
-                }
-                .map { row ->
-                    StudentProgramme(
-                        programmeId = row[StudentProgrammesTable.programmeId],
-                        programmeName = row[ProgrammesTable.name],
-                        yearOfStudy = row[StudentProgrammesTable.yearOfStudy]
-                    )
-                }
-        }
-
     fun getStudentActiveProgramme(studentId: UUID, universityId: UUID): StudentProgramme? =
         exposedTransaction {
-            StudentProgrammesTable
-                .join(ProgrammesTable, JoinType.INNER, StudentProgrammesTable.programmeId, ProgrammesTable.id)
+            StudentEnrollmentsTable
+                .join(ProgrammesTable, JoinType.INNER, StudentEnrollmentsTable.programmeId, ProgrammesTable.id)
                 .selectAll().where {
-                    (StudentProgrammesTable.studentId eq studentId) and
-                            (StudentProgrammesTable.universityId eq universityId) and
-                            (StudentProgrammesTable.isActive eq true)
+                    (StudentEnrollmentsTable.studentId eq studentId) and
+                            (StudentEnrollmentsTable.universityId eq universityId) and
+                            (StudentEnrollmentsTable.isActive eq true)
                 }
-                .orderBy(StudentProgrammesTable.createdAt to SortOrder.DESC)
+                .orderBy(StudentEnrollmentsTable.enrollmentDate to SortOrder.DESC)
                 .limit(1)
                 .map { row ->
                     StudentProgramme(
-                        programmeId = row[StudentProgrammesTable.programmeId],
+                        programmeId = row[StudentEnrollmentsTable.programmeId],
                         programmeName = row[ProgrammesTable.name],
-                        yearOfStudy = row[StudentProgrammesTable.yearOfStudy]
+                        yearOfStudy = row[StudentEnrollmentsTable.yearOfStudy]
                     )
                 }
                 .singleOrNull()
         }
 
-    fun linkStudentToProgramme(studentId: UUID, unitId: UUID, programmeId: UUID, universityId: UUID) {
+    fun linkStudentToProgramme(
+        studentId: UUID,
+        unitId: UUID,
+        programmeId: UUID,
+        universityId: UUID,
+        academicTermId: UUID,
+        enrollmentSource: StudentEnrollmentSource
+    ) {
         exposedTransaction {
             val yearOfStudy = ProgrammeUnitsTable
                 .select(ProgrammeUnitsTable.yearOfStudy)
@@ -65,26 +55,27 @@ class ProgrammeRepository() {
                 }.single()[ProgrammeUnitsTable.yearOfStudy]
 
             // Deactivate any existing active programmes for this student at this university
-            StudentProgrammesTable.update(
+            StudentEnrollmentsTable.update(
                 where = {
-                    (StudentProgrammesTable.studentId eq studentId) and
-                            (StudentProgrammesTable.universityId eq universityId) and
-                            (StudentProgrammesTable.isActive eq true)
+                    (StudentEnrollmentsTable.studentId eq studentId) and
+                            (StudentEnrollmentsTable.universityId eq universityId) and
+                            (StudentEnrollmentsTable.isActive eq true)
                 }
             ) {
                 it[isActive] = false
             }
 
             // Create new active programme link
-            StudentProgrammesTable.insert {
+            StudentEnrollmentsTable.insert {
                 it[id] = UUID.randomUUID()
-                it[StudentProgrammesTable.studentId] = studentId
-                it[StudentProgrammesTable.programmeId] = programmeId
-                it[StudentProgrammesTable.universityId] = universityId
-                it[StudentProgrammesTable.yearOfStudy] = yearOfStudy
-                it[StudentProgrammesTable.academicYear] = null
-                it[StudentProgrammesTable.isActive] = true
-                it[StudentProgrammesTable.enrolledAt] = LocalDateTime.now()
+                it[StudentEnrollmentsTable.studentId] = studentId
+                it[StudentEnrollmentsTable.programmeId] = programmeId
+                it[StudentEnrollmentsTable.universityId] = universityId
+                it[StudentEnrollmentsTable.academicTermId] = academicTermId
+                it[StudentEnrollmentsTable.yearOfStudy] = yearOfStudy
+                it[StudentEnrollmentsTable.enrollmentSource] = enrollmentSource
+                it[StudentEnrollmentsTable.enrollmentDate] = LocalDateTime.now()
+                it[StudentEnrollmentsTable.isActive] = true
             }
         }
     }

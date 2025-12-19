@@ -1,9 +1,9 @@
 package com.amos_tech_code.services.impl
 
 import com.amos_tech_code.data.repository.LecturerAcademicRepository
-import com.amos_tech_code.domain.dtos.requests.AcademicSetupUpRequest
-import com.amos_tech_code.domain.dtos.requests.ProgrammeRequest
-import com.amos_tech_code.domain.dtos.requests.UnitRequest
+import com.amos_tech_code.domain.dtos.requests.AcademicSetUpRequest
+import com.amos_tech_code.domain.dtos.requests.ProgrammeSetupRequest
+import com.amos_tech_code.domain.dtos.requests.UnitSetupRequest
 import com.amos_tech_code.domain.dtos.response.AcademicSetupResponse
 import com.amos_tech_code.domain.dtos.response.LecturerUniversitiesResponse
 import com.amos_tech_code.services.LecturerAcademicService
@@ -18,59 +18,91 @@ class LecturerAcademicServiceImpl(
     private val repository: LecturerAcademicRepository
 ) : LecturerAcademicService {
 
-    override fun saveAcademicSetup(lecturerId: UUID, request: AcademicSetupUpRequest): AcademicSetupResponse {
-        // Step 1: Validate ALL input first (before any database interaction)
+    override fun saveAcademicSetup(
+        lecturerId: UUID,
+        request: AcademicSetUpRequest
+    ): AcademicSetupResponse {
+
         validateAcademicSetupRequest(request)
 
-        // Step 2: Execute everything in a single transaction
         return transaction {
             try {
-                // Step 3: Find or create university
-                val universityId = repository.findOrCreateUniversity(request.universityName)
+                // 1. Resolve university
+                val universityId = if (request.universityId != null) {
+                    UUID.fromString(request.universityId)
+                } else {
+                    repository.findOrCreateUniversity(
+                        request.universityName
+                            ?: throw ValidationException("University name is required")
+                    )
+                }
 
-                // Step 4: Link lecturer to university
+                // 2. Link lecturer to university
                 repository.linkLecturerToUniversity(lecturerId, universityId)
 
-                // Step 5: Process each programme
-                for (programmeRequest in request.programmes) {
-                    // Step 5a: Find or create department
-                    val departmentId = repository.findOrCreateDepartment(universityId, programmeRequest.department)
+                // 3. Resolve academic term
+                val academicTermId = repository.findOrCreateAcademicTerm(
+                    universityId = universityId,
+                    academicYear = request.academicYear,
+                    semester = request.semester
+                )
 
-                    // Step 5b: Find or create programme
-                    val programmeId = repository.findOrCreateProgramme(
-                        universityId = universityId,
-                        departmentId = departmentId,
-                        programmeName = programmeRequest.name,
+                // 4. Process programmes
+                request.programmes.forEach { programmeRequest ->
+
+                    // 4a. Resolve department
+                    val departmentId = if (programmeRequest.departmentId != null) {
+                        UUID.fromString(programmeRequest.departmentId)
+                    } else {
+                        repository.findOrCreateDepartment(
+                            universityId,
+                            programmeRequest.departmentName
+                        )
+                    }
+
+                    // 4b. Resolve programme (NO yearOfStudy here)
+                    val programmeId = if (programmeRequest.programmeId != null) {
+                        UUID.fromString(programmeRequest.programmeId)
+                    } else {
+                        repository.findOrCreateProgramme(
+                            universityId = universityId,
+                            departmentId = departmentId,
+                            programmeName = programmeRequest.programmeName
+                        )
+                    }
+
+                    // 4c. Resolve units
+                    val units = repository.findOrCreateUnitsBatch(
+                        universityId,
+                        departmentId,
+                        programmeRequest.units
+                    )
+
+                    // 4d. Link programme units WITH year & semester
+                    repository.linkProgrammeUnitsBatch(
+                        programmeId = programmeId,
+                        units = units,
                         yearOfStudy = programmeRequest.yearOfStudy
                     )
 
-                    // Step 5c: Process ALL units in batch for this programme
-                    if (programmeRequest.units.isNotEmpty()) {
-                        // Batch create/find all units for this programme
-                        val unitIds = repository.findOrCreateUnitsBatch(universityId, programmeRequest.units)
-
-                        // Batch link all units to programme
-                        repository.linkProgrammeUnitsBatch(programmeId, unitIds, programmeRequest.yearOfStudy)
-
-                        // Batch create teaching assignments
-                        repository.createTeachingAssignmentsBatch(
-                            lecturerId = lecturerId,
-                            universityId = universityId,
-                            programmeId = programmeId,
-                            unitIds = unitIds,
-                            yearOfStudy = programmeRequest.yearOfStudy
-                        )
-                    }
+                    // 4e. Create teaching assignments (TERM-SCOPED)
+                    repository.createTeachingAssignmentsBatch(
+                        lecturerId = lecturerId,
+                        universityId = universityId,
+                        programmeId = programmeId,
+                        units = units,
+                        academicTermId = academicTermId,
+                        yearOfStudy = programmeRequest.yearOfStudy
+                    )
                 }
 
-                // Step 6: Mark lecturer profile as complete
+                // 5. Mark lecturer profile complete
                 repository.markLecturerProfileComplete(lecturerId)
 
-                // Step 7: Return the created academic setup
+                // 6. Return academic setup
                 repository.getLecturerAcademicSetup(lecturerId)
 
             } catch (ex: Exception) {
-                // Rollback will happen automatically
                 when (ex) {
                     is AppException -> throw ex
                     else -> throw InternalServerException("Failed to save academic setup")
@@ -105,46 +137,56 @@ class LecturerAcademicServiceImpl(
         }
     }
 
-    private fun validateAcademicSetupRequest(request: AcademicSetupUpRequest) {
-        if (request.universityName.isBlank()) {
-            throw ValidationException("University name is required")
+    private fun validateAcademicSetupRequest(request: AcademicSetUpRequest) {
+//        if (request.universityName.isBlank()) {
+//            throw ValidationException("University name is required")
+//        }
+        if (request.academicYear.isBlank()) {
+            throw ValidationException("Academic year is required")
+        }
+        if (request.semester !in listOf(1, 2)) {
+            throw ValidationException("Semester must be 1 or 2")
         }
         if (request.programmes.isEmpty()) {
             throw ValidationException("At least one programme is required")
         }
-
-        // Validate all programmes and their units
-        request.programmes.forEachIndexed { index, programmeRequest ->
-            validateProgrammeRequest(programmeRequest, index)
-        }
+        request.programmes.forEachIndexed { index, programmeRequest -> validateProgrammeRequest(programmeRequest, index) }
     }
 
-    private fun validateProgrammeRequest(programmeRequest: ProgrammeRequest, index: Int) {
-        if (programmeRequest.name.isBlank()) {
+    private fun validateProgrammeRequest(programmeRequest: ProgrammeSetupRequest, index: Int) {
+        if (programmeRequest.programmeId == null && programmeRequest.programmeName.isBlank()) {
             throw ValidationException("Programme name is required for programme at index $index")
         }
-        if (programmeRequest.department.isBlank()) {
-            throw ValidationException("Department name is required for programme '${programmeRequest.name}'")
+        if (programmeRequest.departmentId == null && programmeRequest.departmentName.isBlank()) {
+            throw ValidationException("Department name is required for programme '${programmeRequest.programmeName}'")
         }
         if (programmeRequest.yearOfStudy <= 0) {
-            throw ValidationException("Year of study must be positive for programme '${programmeRequest.name}'")
+            throw ValidationException("Year of study must be positive for programme '${programmeRequest.programmeName}'")
         }
         if (programmeRequest.units.isEmpty()) {
-            throw ValidationException("At least one unit is required for programme '${programmeRequest.name}'")
+            throw ValidationException("At least one unit is required for programme '${programmeRequest.programmeName}'")
         }
 
         // Validate all units in this programme
         programmeRequest.units.forEachIndexed { unitIndex, unitRequest ->
-            validateUnitRequest(unitRequest, programmeRequest.name, unitIndex)
+            validateUnitRequest(unitRequest, programmeRequest.programmeName, unitIndex)
         }
     }
 
-    private fun validateUnitRequest(unitRequest: UnitRequest, programmeName: String, index: Int) {
+    private fun validateUnitRequest(
+        unitRequest: UnitSetupRequest,
+        programmeName: String,
+        index: Int
+    ) {
         if (unitRequest.code.isBlank()) {
-            throw ValidationException("Unit code is required for unit at index $index in programme '$programmeName'")
+            throw ValidationException("Unit code is required at index $index in $programmeName")
         }
         if (unitRequest.name.isBlank()) {
-            throw ValidationException("Unit name is required for unit '${unitRequest.code}' in programme '$programmeName'")
+            throw ValidationException("Unit name is required for ${unitRequest.code}")
+        }
+        if (unitRequest.semester !in listOf(1, 2)) {
+            throw ValidationException("Invalid semester for unit ${unitRequest.code}")
         }
     }
+
 }

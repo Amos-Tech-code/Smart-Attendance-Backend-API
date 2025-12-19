@@ -2,123 +2,170 @@ package com.amos_tech_code.data.database.entities
 
 import com.amos_tech_code.domain.models.AttendanceMethod
 import com.amos_tech_code.domain.models.AttendanceSessionStatus
-import org.jetbrains.exposed.sql.Column
+import com.amos_tech_code.domain.models.SessionType
 import org.jetbrains.exposed.sql.ReferenceOption
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.javatime.datetime
-import java.time.LocalDateTime
 import java.time.LocalDateTime.now
-import java.util.UUID
 
-// Attendance Sessions
+// Attendance sessions started by lecturers
 object AttendanceSessionsTable : Table("attendance_sessions") {
-    val id: Column<UUID> = uuid("id").autoGenerate()
-    val lecturerId: Column<UUID> = uuid("lecturer_id").references(LecturersTable.id, onDelete = ReferenceOption.CASCADE)
-    val universityId: Column<UUID> = uuid("university_id").references(UniversitiesTable.id, onDelete = ReferenceOption.CASCADE)
-    val unitId: Column<UUID> = uuid("unit_id").references(UnitsTable.id, onDelete = ReferenceOption.CASCADE)
+    val id = uuid("id").autoGenerate()
+    val lecturerId = uuid("lecturer_id")
+        .references(LecturersTable.id, onDelete = ReferenceOption.CASCADE)
+    val universityId = uuid("university_id")
+        .references(UniversitiesTable.id, onDelete = ReferenceOption.CASCADE)
+    val unitId = uuid("unit_id")
+        .references(UnitsTable.id, onDelete = ReferenceOption.CASCADE)
+    val academicTermId = uuid("academic_term_id")
+        .references(AcademicTermsTable.id, onDelete = ReferenceOption.CASCADE)
 
-    // Session Identification
-    val sessionCode: Column<String> = varchar("session_code", 6).uniqueIndex() // 6-digit unique code
-    val qrCodeUrl: Column<String?> = text("qr_code_url").nullable() // CDN URL for QR code image
+    // Add these fields for multi-programme support
+    val sessionTitle = varchar("session_title", 255).nullable() // e.g., "Math 101 - Week 5 Lecture"
+    val sessionType = customEnumeration(
+        "session_type", "VARCHAR(20)",
+        { SessionType.valueOf(it as String) }, {it.name} ).default(SessionType.REGULAR)
 
-    // Session Configuration
-    val allowedMethod: Column<AttendanceMethod> = customEnumeration(
-        "allowed_method",
-        "VARCHAR(20)",
-        { value -> AttendanceMethod.valueOf(value as String) },
-        { it.name }
-    )
-    val isLocationRequired: Column<Boolean> = bool("is_location_required").default(false)
-    val lecturerLatitude: Column<Double?> = double("lecturer_latitude").nullable()
-    val lecturerLongitude: Column<Double?> = double("lecturer_longitude").nullable()
-    val locationRadius: Column<Int> = integer("location_radius").default(50) // meters
+    // Weekly session tracking
+    val weekNumber = integer("week_number")
+    val sessionNumber = integer("session_number").default(1)
 
-    // Time Management
-    val scheduledStartTime: Column<LocalDateTime?> = datetime("scheduled_start_time").nullable()
-    val actualStartTime: Column<LocalDateTime?> = datetime("actual_start_time").nullable()
-    val scheduledEndTime: Column<LocalDateTime> = datetime("scheduled_end_time")
-    val actualEndTime: Column<LocalDateTime?> = datetime("actual_end_time").nullable()
-    val durationMinutes: Column<Int> = integer("duration_minutes").default(60)
+    // Session codes
+    val sessionCode = varchar("session_code", 6).uniqueIndex()
+    val qrCodeUrl = text("qr_code_url").nullable() // Generated QR code URL
 
-    // Security & Limits
-    val maxAttempts: Column<Int> = integer("max_attempts").default(5)
-    val attemptCount: Column<Int> = integer("attempt_count").default(0)
-    val isLocked: Column<Boolean> = bool("is_locked").default(false)
+    // Configuration
+    val allowedMethod = customEnumeration(
+        "allowed_method", "VARCHAR(20)",
+        { AttendanceMethod.valueOf(it as String) }, { it.name } )
+    val isLocationRequired = bool("is_location_required").default(false)
+    val lecturerLatitude = double("lecturer_latitude").nullable()
+    val lecturerLongitude = double("lecturer_longitude").nullable()
+    val locationRadius = integer("location_radius").default(50)
+
+    // Time management
+    val durationMinutes = integer("duration_minutes").default(30)
+    val scheduledStartTime = datetime("scheduled_start_time")
+    val scheduledEndTime = datetime("scheduled_end_time")
 
     // Status
-    val status: Column<AttendanceSessionStatus> = customEnumeration(
-        "status",
-        "VARCHAR(20)",
-        { value -> AttendanceSessionStatus.valueOf(value as String) },
-        { it.name }
-    ).default(AttendanceSessionStatus.ACTIVE)
+    val status = customEnumeration(
+        "status", "VARCHAR(20)",
+        { AttendanceSessionStatus.valueOf(it as String) }, { it.name })
 
-    val createdAt: Column<LocalDateTime> = datetime("created_at").clientDefault { now() }
-    val updatedAt: Column<LocalDateTime> = datetime("updated_at").clientDefault { now() }
+    val createdAt = datetime("created_at").clientDefault { now() }
+    val updatedAt = datetime("updated_at").clientDefault { now() }
 
     override val primaryKey = PrimaryKey(id)
-
     init {
-        index(isUnique = false, lecturerId, status)
-        index(isUnique = false, sessionCode, status)
+        index(false, lecturerId, universityId, status)
+        index(false, unitId, academicTermId, weekNumber)
+        uniqueIndex("unique_lecturer_unit_week_session",
+            lecturerId, unitId, academicTermId, weekNumber, sessionNumber)
     }
 }
 
 // Session-Programme Mapping (Supports multiple programmes per session)
 object SessionProgrammesTable : Table("session_programmes") {
-    val id: Column<UUID> = uuid("id").autoGenerate()
-    val sessionId: Column<UUID> = uuid("session_id").references(AttendanceSessionsTable.id, onDelete = ReferenceOption.CASCADE)
-    val programmeId: Column<UUID> = uuid("programme_id").references(ProgrammesTable.id, onDelete = ReferenceOption.CASCADE)
-    val yearOfStudy: Column<Int> = integer("year_of_study")
-    val createdAt: Column<LocalDateTime> = datetime("created_at").clientDefault { now() }
+    val id = uuid("id").autoGenerate()
+    val sessionId = uuid("session_id").references(AttendanceSessionsTable.id, onDelete = ReferenceOption.CASCADE)
+    val programmeId = uuid("programme_id").references(ProgrammesTable.id, onDelete = ReferenceOption.CASCADE)
+    val yearOfStudy = integer("year_of_study") // Useful for multi-year sessions
+    val createdAt = datetime("created_at").clientDefault { now() }
 
     override val primaryKey = PrimaryKey(id)
 
-    init {
-        uniqueIndex("unique_session_programme", sessionId, programmeId)
-    }
+    init { uniqueIndex("unique_session_programme", sessionId, programmeId) }
 }
 
-// Attendance Records
+// Attendance records per student
 object AttendanceRecordsTable : Table("attendance_records") {
-    val id: Column<UUID> = uuid("id").autoGenerate()
-    val sessionId: Column<UUID> = uuid("session_id").references(AttendanceSessionsTable.id, onDelete = ReferenceOption.CASCADE)
-    val studentId: Column<UUID> = uuid("student_id").references(StudentsTable.id, onDelete = ReferenceOption.CASCADE)
-    val programmeId: Column<UUID> = uuid("programme_id").references(ProgrammesTable.id, onDelete = ReferenceOption.CASCADE)
+    val id = uuid("id").autoGenerate()
 
-    // Verification Details
-    val attendanceMethodUsed: Column<AttendanceMethod> = customEnumeration(
-        "attendance_method_used",
-        "VARCHAR(20)",
-        { value -> AttendanceMethod.valueOf(value as String) },
+    val sessionId = uuid("session_id")
+        .references(AttendanceSessionsTable.id, onDelete = ReferenceOption.CASCADE)
+
+    val studentId = uuid("student_id")
+        .references(StudentsTable.id, onDelete = ReferenceOption.CASCADE)
+
+    val attendanceMethodUsed = customEnumeration(
+        "attendance_method_used", "VARCHAR(20)",
+        { AttendanceMethod.valueOf(it as String) },
         { it.name }
     )
-    val sessionCode: Column<String> = varchar("session_code", 6) // Code used for attendance
 
-    // Location Verification
-    val studentLatitude: Column<Double?> = double("student_latitude").nullable()
-    val studentLongitude: Column<Double?> = double("student_longitude").nullable()
-    val distanceFromLecturer: Column<Double?> = double("distance_from_lecturer").nullable() // meters
-    val isLocationVerified: Column<Boolean> = bool("is_location_verified").default(false)
+    val studentLatitude = double("student_latitude").nullable()
+    val studentLongitude = double("student_longitude").nullable()
+    val distanceFromLecturer = double("distance_from_lecturer").nullable()
+    val isLocationVerified = bool("is_location_verified").default(false)
 
-    // Device Verification
-    val deviceId: Column<String> = varchar("device_id", 255) // Current device used
-    val expectedDeviceId: Column<String?> = varchar("expected_device_id", 255).nullable() // Student's registered device
-    val isDeviceVerified: Column<Boolean> = bool("is_device_verified").default(false)
+    val deviceId = varchar("device_id", 255)
+    val expectedDeviceId = varchar("expected_device_id", 255).nullable()
+    val isDeviceVerified = bool("is_device_verified").default(false)
 
-    // Flags for monitoring
-    val isSuspicious: Column<Boolean> = bool("is_suspicious").default(false)
-    val suspiciousReason: Column<String?> = text("suspicious_reason").nullable()
+    val isSuspicious = bool("is_suspicious").default(false)
+    val suspiciousReason = text("suspicious_reason").nullable()
 
-    val attendedAt: Column<LocalDateTime> = datetime("attended_at").clientDefault { now() }
-    val createdAt: Column<LocalDateTime> = datetime("created_at").clientDefault { now() }
+    val attendedAt = datetime("attended_at").clientDefault { now() }
 
     override val primaryKey = PrimaryKey(id)
 
     init {
         uniqueIndex("unique_student_session", sessionId, studentId)
-        index(isUnique = false, studentId)
-        index(isUnique = false, sessionId)
-        index(isUnique = false, deviceId)
+        index(false, studentId)
+        index(false, sessionId)
+        index(false, deviceId)
+    }
+}
+
+object AttendanceExportsTable : Table("attendance_exports") {
+    val id = uuid("id").autoGenerate()
+    val lecturerId = uuid("lecturer_id")
+        .references(LecturersTable.id, onDelete = ReferenceOption.CASCADE)
+    val teachingAssignmentId = uuid("teaching_assignment_id")
+        .references(LecturerTeachingAssignmentsTable.id, onDelete = ReferenceOption.CASCADE)
+
+    val exportType = varchar("export_type", 20) // PDF, EXCEL, CSV
+    val exportFormat = varchar("export_format", 50) // "Weekly", "Semester", "Custom"
+    val academicTermId = uuid("academic_term_id")
+        .references(AcademicTermsTable.id, onDelete = ReferenceOption.CASCADE)
+    val weekRange = varchar("week_range", 50).nullable() // "Week 1-7"
+
+    val fileUrl = text("file_url")
+    val fileSize = long("file_size")
+    val fileName = varchar("file_name", 255)
+
+    val createdAt = datetime("created_at").clientDefault { now() }
+    val expiresAt = datetime("expires_at").nullable() // Auto-cleanup
+
+    override val primaryKey = PrimaryKey(id)
+    init {
+        index(false, lecturerId, createdAt)
+        index(false, teachingAssignmentId, academicTermId)
+    }
+}
+
+object AttendanceSummariesTable : Table("attendance_summaries") {
+    val id = uuid("id").autoGenerate()
+    val teachingAssignmentId = uuid("teaching_assignment_id")
+        .references(LecturerTeachingAssignmentsTable.id, onDelete = ReferenceOption.CASCADE)
+    val studentId = uuid("student_id")
+        .references(StudentsTable.id, onDelete = ReferenceOption.CASCADE)
+    val academicTermId = uuid("academic_term_id")
+        .references(AcademicTermsTable.id, onDelete = ReferenceOption.CASCADE)
+
+    val totalSessions = integer("total_sessions").default(0)
+    val attendedSessions = integer("attended_sessions").default(0)
+    val attendancePercentage = double("attendance_percentage").default(0.0)
+
+    val lastCalculated = datetime("last_calculated").clientDefault { now() }
+    val createdAt = datetime("created_at").clientDefault { now() }
+    val updatedAt = datetime("updated_at").clientDefault { now() }
+
+    override val primaryKey = PrimaryKey(id)
+    init {
+        uniqueIndex("unique_student_teaching_summary",
+            studentId, teachingAssignmentId, academicTermId)
+        index(false, teachingAssignmentId, attendancePercentage)
     }
 }

@@ -28,6 +28,41 @@ class AuthServiceImpl(
     private val googleAuthService: GoogleAuthService,
 ) : AuthService {
 
+    /**
+     * Mock implementation of authenticateLecturerWithGoogle for testing
+     * Simulates Google authentication without actually calling Google API
+     */
+    override fun mockAuthenticateLecturerWithGoogle(idToken: String): LecturerAuthResponse {
+        try {
+            val DEFAULT_LECTURER_EMAIL = "lecturer@example.com"
+
+            if (idToken.isBlank()) throw ValidationException("Google id token is required.")
+
+            // Simulate finding existing lecturer
+            val existingLecturer = lecturerRepository.findByEmail(DEFAULT_LECTURER_EMAIL)
+
+            return if (existingLecturer != null) {
+                // Simulate updating last login
+                lecturerRepository.updateLastLogin(existingLecturer.id, LocalDateTime.now())
+
+                LecturerAuthResponse(
+                    token = JwtConfig.generateToken(existingLecturer.id.toString(), UserRole.LECTURER),
+                    name = existingLecturer.name ?: "Unknown",
+                    email = existingLecturer.email,
+                    profileComplete = existingLecturer.isProfileComplete,
+                    userType = UserRole.LECTURER
+                )
+            } else {
+                throw ResourceNotFoundException("User not found")
+            }
+        } catch (e: Exception) {
+            when (e) {
+                is ValidationException -> throw e
+                else -> throw InternalServerException("An unknown error occurred: Mock implementation of authenticateLecturerWithGoogle.")
+            }
+        }
+    }
+
     override suspend fun authenticateLecturerWithGoogle(idToken: String): LecturerAuthResponse {
         try {
             if (idToken.isBlank()) throw ValidationException("Google id token is required.")
@@ -145,10 +180,10 @@ class AuthServiceImpl(
                 throw IllegalStateException("No device registered for student: ${student.registrationNumber}")
 
             if (registeredDevice.deviceId == deviceInfo.deviceId) {
-                // ✅ Correct device → update lastSeen
+                // Correct device → update lastSeen
                 studentRepository.updateDeviceLastSeen(registeredDevice.deviceId, LocalDateTime.now())
             } else {
-                // ⚠️ Different device → flag suspicious
+                // Different device → flag suspicious
                 studentRepository.flagSuspiciousLogin(student.id, deviceInfo)
             }
 

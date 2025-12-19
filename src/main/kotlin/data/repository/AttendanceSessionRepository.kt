@@ -8,7 +8,6 @@ import com.amos_tech_code.domain.models.AttendanceRecord
 import com.amos_tech_code.domain.models.AttendanceSession
 import com.amos_tech_code.domain.models.AttendanceSessionStatus
 import com.amos_tech_code.domain.models.CreateSessionData
-import com.amos_tech_code.domain.models.PreviousAttendance
 import com.amos_tech_code.domain.models.SessionProgramme
 import com.amos_tech_code.domain.models.UpdateSessionData
 import com.amos_tech_code.utils.AuthorizationException
@@ -17,6 +16,10 @@ import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import java.time.LocalDateTime
 import java.util.*
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 class AttendanceSessionRepository() {
 
@@ -35,9 +38,7 @@ class AttendanceSessionRepository() {
             it[lecturerLongitude] = sessionData.lecturerLongitude
             it[locationRadius] = sessionData.locationRadius
             it[scheduledStartTime] = sessionData.scheduledStartTime
-            it[actualStartTime] = sessionData.actualStartTime
             it[scheduledEndTime] = sessionData.scheduledEndTime
-            it[durationMinutes] = sessionData.durationMinutes
             it[status] = sessionData.sessionStatus
         }
 
@@ -203,7 +204,7 @@ class AttendanceSessionRepository() {
             }
             .singleOrNull()
 
-        session?.let { row ->
+        session?.let {
             val updatedRows = AttendanceSessionsTable.update(
                 where = {
                     (AttendanceSessionsTable.id eq sessionId) and
@@ -211,7 +212,6 @@ class AttendanceSessionRepository() {
                 }
             ) {
                 it[status] = AttendanceSessionStatus.ENDED
-                it[actualEndTime] = LocalDateTime.now()
                 it[updatedAt] = LocalDateTime.now()
             }
 
@@ -260,7 +260,7 @@ class AttendanceSessionRepository() {
                     radiusMeters = session[AttendanceSessionsTable.locationRadius]
                 ),
                 timeInfo = TimeInfo(
-                    startTime = session[AttendanceSessionsTable.actualStartTime].toString(),
+                    startTime = session[AttendanceSessionsTable.scheduledStartTime].toString(),
                     endTime = session[AttendanceSessionsTable.scheduledEndTime].toString(),
                     durationMinutes = session[AttendanceSessionsTable.durationMinutes]
                 ),
@@ -328,7 +328,7 @@ class AttendanceSessionRepository() {
                         radiusMeters = session[AttendanceSessionsTable.locationRadius]
                     ),
                     timeInfo = TimeInfo(
-                        startTime = session[AttendanceSessionsTable.actualStartTime].toString(),
+                        startTime = session[AttendanceSessionsTable.scheduledStartTime].toString(),
                         endTime = session[AttendanceSessionsTable.scheduledEndTime].toString(),
                         durationMinutes = session[AttendanceSessionsTable.durationMinutes]
                     ),
@@ -436,9 +436,7 @@ class AttendanceSessionRepository() {
             it[id] = attendanceId
             it[AttendanceRecordsTable.sessionId] = sessionId
             it[AttendanceRecordsTable.studentId] = studentId
-            it[AttendanceRecordsTable.programmeId] = programmeId
             it[AttendanceRecordsTable.attendanceMethodUsed] = attendanceMethod
-            it[AttendanceRecordsTable.sessionCode] = sessionCode
             it[AttendanceRecordsTable.studentLatitude] = studentLat
             it[AttendanceRecordsTable.studentLongitude] = studentLng
             it[AttendanceRecordsTable.distanceFromLecturer] = distance
@@ -469,8 +467,7 @@ class AttendanceSessionRepository() {
                 .where {
                     (AttendanceSessionsTable.sessionCode eq sessionCode) and
                             (UnitsTable.code eq unitCode) and
-                            (AttendanceSessionsTable.status eq AttendanceSessionStatus.ACTIVE) and
-                            (AttendanceSessionsTable.isLocked eq false)
+                            (AttendanceSessionsTable.status eq AttendanceSessionStatus.ACTIVE)
                 }
                 .orderBy(AttendanceSessionsTable.createdAt to SortOrder.DESC)
                 .limit(1)
@@ -514,34 +511,17 @@ class AttendanceSessionRepository() {
 
     }
 
-    fun getPreviousAttendanceRecord(studentId: UUID, sessionId: UUID): PreviousAttendance? = exposedTransaction {
-        AttendanceRecordsTable
-            .selectAll().where {
-                (AttendanceRecordsTable.studentId eq studentId) and
-                        (AttendanceRecordsTable.sessionId eq sessionId)
-            }
-            .orderBy(AttendanceRecordsTable.attendedAt to SortOrder.DESC)
-            .limit(1)
-            .map { row ->
-                PreviousAttendance(
-                    programmeId = row[AttendanceRecordsTable.programmeId],
-                    attendedAt = row[AttendanceRecordsTable.attendedAt]
-                )
-            }
-            .singleOrNull()
-    }
-
     private fun calculateDistance(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
         val earthRadius = 6371000.0 // meters
 
         val dLat = Math.toRadians(lat2 - lat1)
         val dLng = Math.toRadians(lng2 - lng1)
 
-        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-                Math.sin(dLng / 2) * Math.sin(dLng / 2)
+        val a = sin(dLat / 2) * sin(dLat / 2) +
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+                sin(dLng / 2) * sin(dLng / 2)
 
-        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
         return earthRadius * c
     }

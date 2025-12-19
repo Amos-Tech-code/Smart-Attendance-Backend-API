@@ -19,10 +19,20 @@ enum class AttendanceSessionStatus {
 
 
 enum class FlagType {
-    LOCATION_MISMATCH, DEVICE_MISMATCH, MULTIPLE_ATTEMPTS, SUSPICIOUS_DEVICE
+    LOCATION_MISMATCH, DEVICE_MISMATCH,
+    METHOD_NOT_ALLOWED, MULTIPLE_ATTEMPTS, SUSPICIOUS_DEVICE
 }
 
 enum class SeverityLevel {
     LOW, MEDIUM, HIGH, CRITICAL
+}
+
+
+enum class StudentEnrollmentSource {
+    ATTENDANCE, MANUAL
+}
+
+enum class SessionType {
+    REGULAR, MAKEUP, SPECIAL
 }
 

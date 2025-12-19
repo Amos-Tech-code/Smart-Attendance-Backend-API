@@ -7,6 +7,9 @@ import com.amos_tech_code.domain.dtos.response.StudentAuthResponse
 
 interface AuthService {
 
+    // Lecturer auth test
+    fun mockAuthenticateLecturerWithGoogle(idToken: String): LecturerAuthResponse
+
     // Lecturer authentication
     suspend fun authenticateLecturerWithGoogle(idToken: String): LecturerAuthResponse
 

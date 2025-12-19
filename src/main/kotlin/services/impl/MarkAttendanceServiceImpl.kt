@@ -11,6 +11,7 @@ import com.amos_tech_code.domain.dtos.response.VerificationResult
 import com.amos_tech_code.domain.models.AttendanceSession
 import com.amos_tech_code.domain.models.FlagType
 import com.amos_tech_code.domain.models.SeverityLevel
+import com.amos_tech_code.domain.models.StudentEnrollmentSource
 import com.amos_tech_code.services.MarkAttendanceService
 import com.amos_tech_code.utils.AppException
 import com.amos_tech_code.utils.ConflictException
@@ -18,6 +19,10 @@ import com.amos_tech_code.utils.InternalServerException
 import com.amos_tech_code.utils.ValidationException
 import java.time.LocalDateTime
 import java.util.*
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 class MarkAttendanceServiceImpl(
     private val attendanceSessionRepository: AttendanceSessionRepository,
@@ -30,7 +35,7 @@ class MarkAttendanceServiceImpl(
             validateMarkAttendanceRequest(request)
 
             // Verify session exists and is active
-            val session = attendanceSessionRepository.getActiveSessionByCodeAndSecret(
+            val session = attendanceSessionRepository.getActiveSessionBySessionCodeAndUnitCode(
                 request.sessionCode,
                 request.unitCode
             ) ?: return createErrorResponse("Invalid session or session has ended")
@@ -66,6 +71,8 @@ class MarkAttendanceServiceImpl(
             return createErrorResponse("No programmes associated with this session")
         }
 
+        val academicTermId = UUID.randomUUID() // TODO(): Remove Random UUID * Replace with real impl
+
         return when {
 
             // Case 1: Session has only one programme - auto-link student to it
@@ -73,7 +80,13 @@ class MarkAttendanceServiceImpl(
                 val programme = sessionProgrammes.first()
                 // Link student to programme on first attendance
                 programmeRepository.linkStudentToProgramme(
-                    studentId = studentId, programmeId = programme.programmeId, unitId = session.unitId, universityId = session.universityId)
+                    studentId = studentId,
+                    programmeId = programme.programmeId,
+                    unitId = session.unitId,
+                    universityId = session.universityId,
+                    academicTermId = academicTermId,
+                    enrollmentSource = StudentEnrollmentSource.ATTENDANCE,
+                )
                 createAttendanceRecord(studentId, session, request, programme.programmeId)
             }
 
@@ -84,7 +97,14 @@ class MarkAttendanceServiceImpl(
                     val programmeId = UUID.fromString(programmeIdStr)
                     if (sessionProgrammes.any { it.programmeId == programmeId }) {
                         // Link student to selected programme
-                        programmeRepository.linkStudentToProgramme(studentId, programmeId, session.unitId, session.universityId)
+                        programmeRepository.linkStudentToProgramme(
+                            studentId,
+                            programmeId,
+                            session.unitId,
+                            session.universityId,
+                            academicTermId = academicTermId,
+                            enrollmentSource = StudentEnrollmentSource.ATTENDANCE
+                        )
                         return createAttendanceRecord(studentId, session, request, programmeId)
                     }
                 }
@@ -165,7 +185,6 @@ class MarkAttendanceServiceImpl(
             sessionId = session.id,
             programmeId = programmeId,
             sessionCode = request.sessionCode,
-            secretKey = request.unitCode,
             deviceId = request.deviceId,
             studentLat = request.studentLat,
             studentLng = request.studentLng,
@@ -190,8 +209,8 @@ class MarkAttendanceServiceImpl(
         request: MarkAttendanceRequest
     ): VerificationResult {
         val locationVerified = verifyLocation(
-            lecturerLat = session.lecturerLatitude,
-            lecturerLng = session.lecturerLongitude,
+            lecturerLat = session.lecturerLatitude ?: 0.0,
+            lecturerLng = session.lecturerLongitude ?: 0.0,
             studentLat = request.studentLat,
             studentLng = request.studentLng,
             radiusMeters = session.locationRadius
@@ -231,11 +250,11 @@ class MarkAttendanceServiceImpl(
         val dLat = Math.toRadians(lat2 - lat1)
         val dLng = Math.toRadians(lng2 - lng1)
 
-        val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-                Math.sin(dLng / 2) * Math.sin(dLng / 2)
+        val a = sin(dLat / 2) * sin(dLat / 2) +
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+                sin(dLng / 2) * sin(dLng / 2)
 
-        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
         return earthRadius * c
     }

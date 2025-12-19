@@ -60,11 +60,8 @@ class AttendanceSessionServiceImpl(
             // Handle QR code generation
             val qrCodeUrl = generateAndUploadQrCode(sessionCode, unitCode)
 
-            val scheduledStartTime = request.scheduledStartTime?.toLocalDateTimeOrThrow()
-            val actualStartTime = if (scheduledStartTime == null) LocalDateTime.now() else null
-            val scheduledEndTime = if (scheduledStartTime == null) {
-                LocalDateTime.now().plusMinutes(request.durationMinutes.toLong())
-            } else scheduledStartTime.plusMinutes(request.durationMinutes.toLong())
+            val scheduledStartTime = request.scheduledStartTime?.toLocalDateTimeOrThrow() ?: LocalDateTime.now()
+            val scheduledEndTime = scheduledStartTime.plusMinutes(request.durationMinutes.toLong())
 
             // Create session data
             val sessionData = CreateSessionData(
@@ -83,7 +80,6 @@ class AttendanceSessionServiceImpl(
                 lecturerLongitude = request.location?.longitude,
                 locationRadius = request.radiusMeters,
                 scheduledStartTime = scheduledStartTime,
-                actualStartTime = actualStartTime,
                 scheduledEndTime = scheduledEndTime,
                 durationMinutes = request.durationMinutes,
                 sessionStatus = if (scheduledStartTime == null) AttendanceSessionStatus.ACTIVE else AttendanceSessionStatus.SCHEDULED

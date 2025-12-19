@@ -1,6 +1,6 @@
 package com.amos_tech_code.routes
 
-import com.amos_tech_code.domain.dtos.requests.AcademicSetupUpRequest
+import com.amos_tech_code.domain.dtos.requests.AcademicSetUpRequest
 import com.amos_tech_code.domain.models.UserRole
 import com.amos_tech_code.services.LecturerAcademicService
 import com.amos_tech_code.utils.getUserIdFromJWT
@@ -24,7 +24,7 @@ fun Route.lecturerAcademicSetupRoutes(
 
             if (call.getUserRoleFromJWT()?.uppercase() != UserRole.LECTURER.name) return@post call.respondForbidden()
 
-            val request = call.receive<AcademicSetupUpRequest>()
+            val request = call.receive<AcademicSetUpRequest>()
 
             val academicSetup = lecturerAcademicService.saveAcademicSetup(lecturerId, request)
 

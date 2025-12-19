@@ -17,7 +17,8 @@ fun Route.authRoutes(authService: AuthService) {
         // Lecturer Google Sign-in
         post("/lecturers/google") {
             val request = call.receive<GoogleSignInRequest>()
-            val result = authService.authenticateLecturerWithGoogle(request.idToken)
+            val result = authService.mockAuthenticateLecturerWithGoogle(request.idToken) // TODO(): Remove
+            //val result = authService.authenticateLecturerWithGoogle(request.idToken)
 
             call.respond(
                 HttpStatusCode.OK,
