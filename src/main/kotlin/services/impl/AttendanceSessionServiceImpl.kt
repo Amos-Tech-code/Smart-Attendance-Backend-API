@@ -24,7 +24,7 @@ import com.amos_tech_code.utils.InternalServerException
 import com.amos_tech_code.utils.ResourceNotFoundException
 import com.amos_tech_code.utils.ValidationException
 import com.amos_tech_code.utils.toLocalDateTimeOrThrow
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import java.time.Instant
 import java.time.LocalDateTime
 import java.util.UUID
@@ -87,7 +87,8 @@ class AttendanceSessionServiceImpl(
 
             var sessionId : UUID? = null
             // Create session and link programmes
-            transaction {
+            newSuspendedTransaction {
+
                 sessionId = attendanceSessionRepository.createSession(sessionData)
                 attendanceSessionRepository.linkSessionToProgrammes(
                     sessionId = sessionId,
@@ -265,7 +266,7 @@ class AttendanceSessionServiceImpl(
         }
     }
 
-    private fun generateUniqueSessionCode(): String {
+    private suspend fun generateUniqueSessionCode(): String {
         var attempts = 0
         val maxAttempts = 10
 

@@ -60,7 +60,7 @@ class MarkAttendanceServiceImpl(
         }
     }
 
-    private fun handleFirstTimeAttendance(
+    private suspend fun handleFirstTimeAttendance(
         studentId: UUID,
         session: AttendanceSession,
         request: MarkAttendanceRequest
@@ -135,7 +135,7 @@ class MarkAttendanceServiceImpl(
         }
     }
 
-    private fun handleSubsequentAttendance(
+    private suspend fun handleSubsequentAttendance(
         studentId: UUID,
         session: AttendanceSession,
         request: MarkAttendanceRequest
@@ -155,7 +155,7 @@ class MarkAttendanceServiceImpl(
         return createAttendanceRecord(studentId, session, request, studentProgramme.programmeId)
     }
 
-    private fun createAttendanceRecord(
+    private suspend fun createAttendanceRecord(
         studentId: UUID,
         session: AttendanceSession,
         request: MarkAttendanceRequest,

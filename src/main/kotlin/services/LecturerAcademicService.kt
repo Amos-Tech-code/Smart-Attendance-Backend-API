@@ -7,7 +7,7 @@ import java.util.UUID
 
 interface LecturerAcademicService {
 
-    fun saveAcademicSetup(lecturerId: UUID, request: AcademicSetUpRequest): AcademicSetupResponse
+    suspend fun saveAcademicSetup(lecturerId: UUID, request: AcademicSetUpRequest): AcademicSetupResponse
 
     suspend fun getLecturerAcademicSetup(lecturerId: UUID, universityId: String? = null): LecturerUniversitiesResponse
 

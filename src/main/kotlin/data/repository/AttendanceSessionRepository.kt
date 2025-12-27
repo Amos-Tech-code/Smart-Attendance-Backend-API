@@ -23,7 +23,7 @@ import kotlin.math.sqrt
 
 class AttendanceSessionRepository() {
 
-    fun createSession(sessionData: CreateSessionData): UUID = exposedTransaction {
+    suspend fun createSession(sessionData: CreateSessionData): UUID = exposedTransaction {
         val sessionId = UUID.randomUUID()
 
         AttendanceSessionsTable.insert {
@@ -45,7 +45,7 @@ class AttendanceSessionRepository() {
         sessionId
     }
 
-    fun linkSessionToProgrammes(
+    suspend fun linkSessionToProgrammes(
         sessionId: UUID,
         programmeIds: List<UUID>,
         unitId: UUID,
@@ -76,7 +76,7 @@ class AttendanceSessionRepository() {
         }
     }
 
-    fun validateLecturerAuthorization(lecturerId: UUID, universityId: UUID, unitId: UUID, programmeIds: List<UUID>) =
+    suspend fun validateLecturerAuthorization(lecturerId: UUID, universityId: UUID, unitId: UUID, programmeIds: List<UUID>) =
         exposedTransaction {
             // Check if lecturer is authorized to teach this unit
             val unauthorizedProgrammes = programmeIds.filterNot { programmeId ->
@@ -96,7 +96,7 @@ class AttendanceSessionRepository() {
 
         }
 
-    fun updateSession(
+    suspend fun updateSession(
         sessionId: UUID,
         lecturerId: UUID,
         updateData: UpdateSessionData
@@ -186,7 +186,7 @@ class AttendanceSessionRepository() {
         getSessionDetails(sessionId)
     }
 
-    fun isSessionCodeUnique(sessionCode: String): Boolean = exposedTransaction {
+    suspend fun isSessionCodeUnique(sessionCode: String): Boolean = exposedTransaction {
         AttendanceSessionsTable
             .selectAll().where {
                 (AttendanceSessionsTable.sessionCode eq sessionCode) and
@@ -195,7 +195,7 @@ class AttendanceSessionRepository() {
             .empty()
     }
 
-    fun endSession(lecturerId: UUID, sessionId: UUID): Boolean = exposedTransaction {
+    suspend fun endSession(lecturerId: UUID, sessionId: UUID): Boolean = exposedTransaction {
         val session = AttendanceSessionsTable
             .selectAll().where {
                 (AttendanceSessionsTable.id eq sessionId) and
@@ -219,7 +219,7 @@ class AttendanceSessionRepository() {
         } ?: false
     }
 
-    fun getActiveSession(lecturerId: UUID): SessionResponse? = exposedTransaction {
+    suspend fun getActiveSession(lecturerId: UUID): SessionResponse? = exposedTransaction {
         val session = AttendanceSessionsTable
             .join(UnitsTable, JoinType.INNER, AttendanceSessionsTable.unitId, UnitsTable.id)
             .selectAll().where {
@@ -269,7 +269,7 @@ class AttendanceSessionRepository() {
         }
     }
 
-    fun findUnitCodeById(unitId: UUID) : String = exposedTransaction {
+    suspend fun findUnitCodeById(unitId: UUID) : String = exposedTransaction {
         UnitsTable
             .select(UnitsTable.code)
             .where { UnitsTable.id eq unitId }
@@ -278,14 +278,14 @@ class AttendanceSessionRepository() {
             ?: throw NotFoundException("Unit not found")
     }
 
-    fun getSessionQrCodeUrl(sessionId: UUID): String? = exposedTransaction {
+    suspend fun getSessionQrCodeUrl(sessionId: UUID): String? = exposedTransaction {
         AttendanceSessionsTable
             .selectAll().where { AttendanceSessionsTable.id eq sessionId }
             .singleOrNull()
             ?.get(AttendanceSessionsTable.qrCodeUrl)
     }
 
-    fun getSessionDetails(sessionId: UUID): SessionResponse? {
+    suspend fun getSessionDetails(sessionId: UUID): SessionResponse? {
         return exposedTransaction {
             val session = AttendanceSessionsTable
                 .join(UnitsTable, JoinType.INNER, AttendanceSessionsTable.unitId, UnitsTable.id)
@@ -344,7 +344,7 @@ class AttendanceSessionRepository() {
         }
     }
 
-    fun autoExpireSessions() {
+    suspend fun autoExpireSessions() {
         exposedTransaction {
             AttendanceSessionsTable.update({
                 (AttendanceSessionsTable.status eq AttendanceSessionStatus.ACTIVE) and
@@ -360,7 +360,7 @@ class AttendanceSessionRepository() {
      * Link students with universities and programmes on first attendance
      */
     // Add to your AttendanceSessionRepository
-    fun hasExistingAttendance(studentId: UUID, sessionId: UUID): Boolean = exposedTransaction {
+    suspend fun hasExistingAttendance(studentId: UUID, sessionId: UUID): Boolean = exposedTransaction {
             AttendanceRecordsTable
                 .selectAll().where {
                     (AttendanceRecordsTable.studentId eq studentId) and
@@ -370,7 +370,7 @@ class AttendanceSessionRepository() {
     }
 
 
-    fun createAttendanceRecord(
+    suspend fun createAttendanceRecord(
         studentId: UUID,
         sessionId: UUID,
         programmeId: UUID,
@@ -458,7 +458,7 @@ class AttendanceSessionRepository() {
         )
     }
 
-    fun getActiveSessionBySessionCodeAndUnitCode(sessionCode: String, unitCode: String): AttendanceSession? =
+    suspend fun getActiveSessionBySessionCodeAndUnitCode(sessionCode: String, unitCode: String): AttendanceSession? =
         exposedTransaction {
             AttendanceSessionsTable
                 .join(UnitsTable, JoinType.INNER, AttendanceSessionsTable.unitId, UnitsTable.id)
@@ -489,13 +489,13 @@ class AttendanceSessionRepository() {
                 .singleOrNull()
         }
 
-    fun isFirstAttendance(studentId: UUID, sessionId: UUID): Boolean = exposedTransaction {
+    suspend fun isFirstAttendance(studentId: UUID, sessionId: UUID): Boolean = exposedTransaction {
         AttendanceRecordsTable
             .selectAll().where { AttendanceRecordsTable.studentId eq studentId }
             .count() == 0L
     }
 
-    fun getSessionProgrammes(sessionId: UUID): List<SessionProgramme> = exposedTransaction {
+    suspend fun getSessionProgrammes(sessionId: UUID): List<SessionProgramme> = exposedTransaction {
         SessionProgrammesTable
             .join(ProgrammesTable, JoinType.INNER, SessionProgrammesTable.programmeId, ProgrammesTable.id)
             .join(DepartmentsTable, JoinType.INNER, ProgrammesTable.departmentId, DepartmentsTable.id)

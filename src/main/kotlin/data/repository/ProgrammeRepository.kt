@@ -17,7 +17,7 @@ import java.util.UUID
 
 class ProgrammeRepository() {
 
-    fun getStudentActiveProgramme(studentId: UUID, universityId: UUID): StudentProgramme? =
+    suspend fun getStudentActiveProgramme(studentId: UUID, universityId: UUID): StudentProgramme? =
         exposedTransaction {
             StudentEnrollmentsTable
                 .join(ProgrammesTable, JoinType.INNER, StudentEnrollmentsTable.programmeId, ProgrammesTable.id)
@@ -38,7 +38,7 @@ class ProgrammeRepository() {
                 .singleOrNull()
         }
 
-    fun linkStudentToProgramme(
+    suspend fun linkStudentToProgramme(
         studentId: UUID,
         unitId: UUID,
         programmeId: UUID,

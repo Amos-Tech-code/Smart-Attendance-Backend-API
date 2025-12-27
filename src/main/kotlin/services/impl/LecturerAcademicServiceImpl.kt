@@ -11,21 +11,21 @@ import com.amos_tech_code.utils.AppException
 import com.amos_tech_code.utils.InternalServerException
 import com.amos_tech_code.utils.ResourceNotFoundException
 import com.amos_tech_code.utils.ValidationException
+import org.jetbrains.exposed.sql.transactions.experimental.newSuspendedTransaction
 import java.util.UUID
-import org.jetbrains.exposed.sql.transactions.transaction
 
 class LecturerAcademicServiceImpl(
     private val repository: LecturerAcademicRepository
 ) : LecturerAcademicService {
 
-    override fun saveAcademicSetup(
+    override suspend fun saveAcademicSetup(
         lecturerId: UUID,
         request: AcademicSetUpRequest
     ): AcademicSetupResponse {
 
         validateAcademicSetupRequest(request)
 
-        return transaction {
+        return newSuspendedTransaction {
             try {
                 // 1. Resolve university
                 val universityId = if (request.universityId != null) {

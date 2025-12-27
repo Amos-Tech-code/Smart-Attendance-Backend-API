@@ -30,16 +30,16 @@ import java.util.UUID
 
 class LecturerAcademicRepository() {
 
-    fun findOrCreateUniversity(universityName: String): UUID = exposedTransaction {
+    suspend fun findOrCreateUniversity(universityName: String): UUID = exposedTransaction {
         val normalizedName = normalizeName(universityName)
 
         // Try to find existing university using normalized name
-        val existingUniversity = UniversitiesTable
-            .selectAll().where { UniversitiesTable.name eq normalizedName }
+        val existingUniversityRow = UniversitiesTable
+            .select(UniversitiesTable.id)
+            .where { UniversitiesTable.name eq normalizedName }
             .singleOrNull()
-            ?.get(UniversitiesTable.id)
 
-        existingUniversity ?: run {
+        existingUniversityRow?.get(UniversitiesTable.id) ?: run {
             val universityId = UUID.randomUUID()
             UniversitiesTable.insert {
                 it[id] = universityId
@@ -49,11 +49,11 @@ class LecturerAcademicRepository() {
         }
     }
 
-    fun findOrCreateDepartment(universityId: UUID, departmentName: String): UUID = exposedTransaction {
+    suspend fun findOrCreateDepartment(universityId: UUID, departmentName: String): UUID = exposedTransaction {
         val normalizedName = normalizeName(departmentName)
 
         val existingDepartment = DepartmentsTable
-            .selectAll().where {
+            .select(DepartmentsTable.id).where {
                 (DepartmentsTable.universityId eq universityId) and
                         (DepartmentsTable.name eq normalizedName)
             }
@@ -71,7 +71,7 @@ class LecturerAcademicRepository() {
         }
     }
 
-    fun findOrCreateProgramme(
+    suspend fun findOrCreateProgramme(
         universityId: UUID,
         departmentId: UUID,
         programmeName: String,
@@ -79,7 +79,7 @@ class LecturerAcademicRepository() {
         val normalizedName = normalizeName(programmeName)
 
         val existingProgramme = ProgrammesTable
-            .selectAll().where {
+            .select(ProgrammesTable.id).where {
                 (ProgrammesTable.universityId eq universityId) and
                         (ProgrammesTable.departmentId eq departmentId) and
                         (ProgrammesTable.name eq normalizedName)
@@ -100,7 +100,7 @@ class LecturerAcademicRepository() {
     }
 
     // Batch operation for units
-    fun findOrCreateUnitsBatch(
+    suspend fun findOrCreateUnitsBatch(
         universityId: UUID,
         departmentId: UUID,
         unitRequests: List<UnitSetupRequest>
@@ -156,14 +156,14 @@ class LecturerAcademicRepository() {
         resolvedUnits
     }
 
-    fun findOrCreateAcademicTerm(
+    suspend fun findOrCreateAcademicTerm(
         universityId: UUID,
         academicYear: String,
         semester: Int
     ): UUID = exposedTransaction {
         // 1. Try to find existing term
         AcademicTermsTable
-            .selectAll().where {
+            .select(AcademicTermsTable.id).where {
                 (AcademicTermsTable.universityId eq universityId) and
                         (AcademicTermsTable.academicYear eq academicYear) and
                         (AcademicTermsTable.semester eq semester)
@@ -183,7 +183,7 @@ class LecturerAcademicRepository() {
         } catch (ex: ExposedSQLException) {
             // 3. Handle race condition safely
             AcademicTermsTable
-                .selectAll().where {
+                .select(AcademicTermsTable.id).where {
                     (AcademicTermsTable.universityId eq universityId) and
                             (AcademicTermsTable.academicYear eq academicYear) and
                             (AcademicTermsTable.semester eq semester)
@@ -194,12 +194,12 @@ class LecturerAcademicRepository() {
     }
 
     // Batch operation for programme-unit links
-    fun linkProgrammeUnitsBatch(
+    suspend fun linkProgrammeUnitsBatch(
         programmeId: UUID,
         units: List<ResolvedUnit>,
         yearOfStudy: Int
-    ) {
-        if (units.isEmpty()) return
+    ) = exposedTransaction {
+        if (units.isEmpty()) return@exposedTransaction
 
         ProgrammeUnitsTable.batchInsert(units, ignore = true) { unit ->
             this[ProgrammeUnitsTable.programmeId] = programmeId
@@ -212,7 +212,7 @@ class LecturerAcademicRepository() {
 
 
     // Batch operation for teaching assignments
-    fun createTeachingAssignmentsBatch(
+    suspend fun createTeachingAssignmentsBatch(
         lecturerId: UUID,
         universityId: UUID,
         programmeId: UUID,
@@ -250,7 +250,7 @@ class LecturerAcademicRepository() {
 
     }
 
-    fun linkLecturerToUniversity(lecturerId: UUID, universityId: UUID) = exposedTransaction {
+    suspend fun linkLecturerToUniversity(lecturerId: UUID, universityId: UUID) = exposedTransaction {
         val existingLink = LecturerUniversitiesTable
             .selectAll().where  {
                 (LecturerUniversitiesTable.lecturerId eq lecturerId) and
@@ -267,13 +267,13 @@ class LecturerAcademicRepository() {
         }
     }
 
-    fun markLecturerProfileComplete(lecturerId: UUID) = exposedTransaction {
+    suspend fun markLecturerProfileComplete(lecturerId: UUID) = exposedTransaction {
         LecturersTable.update({ LecturersTable.id eq lecturerId }) {
             it[isProfileComplete] = true
         }
     }
 
-    fun getLecturerAcademicSetup(lecturerId: UUID): AcademicSetupResponse = exposedTransaction {
+    suspend fun getLecturerAcademicSetup(lecturerId: UUID): AcademicSetupResponse = exposedTransaction {
         // Get the most recent university setup for the lecturer
         val universitySetup = LecturerTeachingAssignmentsTable
             .join(UniversitiesTable, JoinType.INNER, LecturerTeachingAssignmentsTable.universityId, UniversitiesTable.id)
@@ -298,7 +298,7 @@ class LecturerAcademicRepository() {
         )
     }
 
-    fun getLecturerUniversities(lecturerId: UUID): List<UniversitySetupResponse> = exposedTransaction {
+    suspend fun getLecturerUniversities(lecturerId: UUID): List<UniversitySetupResponse> = exposedTransaction {
         // Get all universities associated with the lecturer
         val universities = LecturerUniversitiesTable
             .join(UniversitiesTable, JoinType.INNER, LecturerUniversitiesTable.universityId, UniversitiesTable.id)
@@ -315,7 +315,7 @@ class LecturerAcademicRepository() {
         universities
     }
 
-    fun getLecturerUniversity(lecturerId: UUID, universityId: UUID): UniversitySetupResponse? = exposedTransaction {
+    suspend fun getLecturerUniversity(lecturerId: UUID, universityId: UUID): UniversitySetupResponse? = exposedTransaction {
         // Check if lecturer is associated with this university
         val universityAssociation = LecturerUniversitiesTable
             .join(UniversitiesTable, JoinType.INNER, LecturerUniversitiesTable.universityId, UniversitiesTable.id)
